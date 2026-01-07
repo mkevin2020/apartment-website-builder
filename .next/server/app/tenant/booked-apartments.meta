@@ -1,0 +1,16 @@
+{
+  "headers": {
+    "x-nextjs-stale-time": "300",
+    "x-nextjs-prerender": "1",
+    "x-next-cache-tags": "_N_T_/layout,_N_T_/tenant/layout,_N_T_/tenant/booked-apartments/layout,_N_T_/tenant/booked-apartments/page,_N_T_/tenant/booked-apartments"
+  },
+  "segmentPaths": [
+    "/_tree",
+    "/_full",
+    "/tenant/booked-apartments/__PAGE__",
+    "/tenant/booked-apartments",
+    "/tenant",
+    "/_index",
+    "/_head"
+  ]
+}
