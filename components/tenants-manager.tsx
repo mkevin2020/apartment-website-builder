@@ -49,7 +49,7 @@ export function TenantsManager() {
   const [admin, setAdmin] = useState<any>(null);
   const [tenants, setTenants] = useState<TenantRequest[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filterStatus, setFilterStatus] = useState("pending");
+  const [filterStatus, setFilterStatus] = useState("all");
   const [selectedTenant, setSelectedTenant] = useState<TenantRequest | null>(null);
   const [actionType, setActionType] = useState<"approve" | "reject" | "delete" | null>(null);
   const [showDialog, setShowDialog] = useState(false);

@@ -9,11 +9,12 @@ import ChangePasswordModal from "@/components/admin/ChangePasswordModal"
 import { ApartmentsManager } from "@/components/apartments-manager"
 import { EmployeesManager } from "@/components/employees-manager"
 import { BookingsManager } from "@/components/bookings-manager"
+import { OccupiedApartmentsManager } from "@/components/occupied-apartments-manager"
 import { MaintenanceManager } from "@/components/ui/employee/maintenance-manager"
 import { FeedbackManager } from "@/components/feedback-manager"
 import { TenantsManager } from "@/components/tenants-manager"
 import { AdminManager } from "@/components/admin-manager"
-import { Building, Users, Calendar, MessageSquare, Key, Wrench, LogOut, Home, Eye, Shield } from "lucide-react"
+import { Building, Users, Calendar, MessageSquare, Key, Wrench, LogOut, Home, Eye, Shield, AlertCircle } from "lucide-react"
 import Link from "next/link"
 
 export default function AdminDashboard() {
@@ -77,10 +78,14 @@ export default function AdminDashboard() {
         )}
 
         <Tabs defaultValue="apartments" className="space-y-8">
-          <TabsList className="grid w-full grid-cols-7 lg:w-auto">
+          <TabsList className="grid w-full grid-cols-8 lg:w-auto">
             <TabsTrigger value="apartments" className="flex items-center gap-2">
               <Building className="h-4 w-4" />
               <span className="hidden sm:inline">Apartments</span>
+            </TabsTrigger>
+            <TabsTrigger value="occupied" className="flex items-center gap-2">
+              <AlertCircle className="h-4 w-4" />
+              <span className="hidden sm:inline">Occupied</span>
             </TabsTrigger>
             <TabsTrigger value="tenants" className="flex items-center gap-2">
               <Home className="h-4 w-4" />
@@ -110,6 +115,10 @@ export default function AdminDashboard() {
 
           <TabsContent value="apartments">
             <ApartmentsManager />
+          </TabsContent>
+
+          <TabsContent value="occupied">
+            <OccupiedApartmentsManager />
           </TabsContent>
 
           <TabsContent value="tenants">

@@ -14,13 +14,16 @@ import {
   User,
   Calendar,
   DollarSign,
+  CheckSquare,
 } from "lucide-react";
 import Link from "next/link";
 
 interface EmployeeSession {
   id: string;
+  username: string;
   full_name: string;
   email: string;
+  database_id?: number;
 }
 
 interface Booking {
@@ -44,11 +47,13 @@ interface Apartment {
 export default function EmployeeBookingsPage() {
   const router = useRouter();
   const [employee, setEmployee] = useState<EmployeeSession | null>(null);
+  const [employeeDbId, setEmployeeDbId] = useState<number | null>(null);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [apartments, setApartments] = useState<Map<number, Apartment>>(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<string | null>(null);
+  const [markingOccupied, setMarkingOccupied] = useState<number | null>(null);
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -66,6 +71,19 @@ export default function EmployeeBookingsPage() {
 
         const parsedEmployee: EmployeeSession = JSON.parse(employeeData);
         setEmployee(parsedEmployee);
+
+        // Fetch employee record from database to get the correct ID
+        const { data: employeeRecord, error: employeeError } = await supabase
+          .from("employees")
+          .select("id, username, full_name, email")
+          .eq("username", parsedEmployee.username)
+          .single();
+
+        if (employeeError) {
+          console.error("Error fetching employee record:", employeeError);
+        } else if (employeeRecord) {
+          setEmployeeDbId(employeeRecord.id);
+        }
 
         // Fetch all bookings
         const { data: bookingsData, error: bookingsError } = await supabase
@@ -137,6 +155,66 @@ export default function EmployeeBookingsPage() {
   const filteredBookings = filterStatus
     ? bookings.filter((b) => b.status?.toLowerCase() === filterStatus.toLowerCase())
     : bookings;
+
+  const handleMarkAsOccupied = async (booking: Booking) => {
+    if (!employeeDbId) {
+      alert("Employee information not loaded. Please refresh the page.");
+      return;
+    }
+
+    if (!window.confirm(`Mark "${apartments.get(booking.apartment_id)?.name}" as occupied?`)) {
+      return;
+    }
+
+    setMarkingOccupied(booking.id);
+    try {
+      // 1. Create entry in occupied_apartments table
+      const { error: occupiedError, data: occupiedData } = await supabase
+        .from("occupied_apartments")
+        .insert([
+          {
+            apartment_id: booking.apartment_id,
+            booking_id: booking.id,
+            tenant_id: booking.tenant_id,
+            marked_by_employee_id: employeeDbId,
+            occupied_date: new Date().toISOString().split("T")[0],
+            notes: `Marked occupied by employee ${employee?.full_name} for tenant: ${booking.client_name}`,
+          },
+        ]);
+
+      if (occupiedError) {
+        console.error("Occupied apartments insert error:", occupiedError);
+        alert("Error marking apartment as occupied: " + occupiedError.message);
+        setMarkingOccupied(null);
+        return;
+      }
+
+      // 2. Update apartment's is_available status to false
+      const { error: updateError } = await supabase
+        .from("apartments")
+        .update({ is_available: false })
+        .eq("id", booking.apartment_id);
+
+      if (updateError) {
+        alert("Error updating apartment status: " + updateError.message);
+        setMarkingOccupied(null);
+        return;
+      }
+
+      alert("Apartment marked as occupied successfully!");
+      // Refresh bookings list
+      const { data: refreshedBookings } = await supabase
+        .from("bookings")
+        .select("*")
+        .order("start_date", { ascending: false });
+      setBookings(refreshedBookings || []);
+    } catch (err) {
+      console.error("Error:", err);
+      alert("An error occurred while marking the apartment as occupied");
+    } finally {
+      setMarkingOccupied(null);
+    }
+  };
 
   if (loading) {
     return (
@@ -302,6 +380,21 @@ export default function EmployeeBookingsPage() {
                               {getStatusIcon(booking.status)}
                               {booking.status}
                             </span>
+                          </div>
+                          <div className="pt-4">
+                            <Button
+                              onClick={() => handleMarkAsOccupied(booking)}
+                              disabled={markingOccupied === booking.id || booking.status?.toLowerCase() !== "confirmed"}
+                              className="w-full bg-blue-600 hover:bg-blue-700 text-white gap-2"
+                            >
+                              <CheckSquare className="h-4 w-4" />
+                              {markingOccupied === booking.id ? "Marking..." : "Mark as Occupied"}
+                            </Button>
+                            {booking.status?.toLowerCase() !== "confirmed" && (
+                              <p className="text-xs text-gray-500 mt-2 text-center">
+                                Only confirmed bookings can be marked as occupied
+                              </p>
+                            )}
                           </div>
                         </div>
                       </div>
