@@ -121,8 +121,8 @@ export default function EmployeeDashboard() {
 
       if (error) throw error;
 
-      setApartments((prev) =>
-        prev.map((apt) =>
+      setApartments((prev: any[]) =>
+        prev.map((apt: any) =>
           apt.id === id ? { ...apt, is_available: !isAvailable } : apt
         )
       );
@@ -191,7 +191,7 @@ export default function EmployeeDashboard() {
                 <div>
                   <p className="text-gray-600 text-sm">Available Units</p>
                   <p className="text-3xl font-bold">
-                    {apartments.filter((a) => a.is_available).length}
+                    {apartments.filter((a: any) => a.is_available).length}
                   </p>
                 </div>
                 <Calendar className="h-8 w-8 text-green-600 opacity-20" />

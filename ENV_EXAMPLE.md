@@ -25,6 +25,44 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzd
 SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlvdXItcHJvamVjdCIsInJvbGUiOiJzZXJ2aWNlX3JvbGUiLCJpYXQiOjE2MzA3MDk4MDAsImV4cCI6MTk5OTk5OTk5OX0.xxxxx
 
 # ============================================================
+# MTN MoMo Payment Integration
+# ============================================================
+# Get these from MTN MoMo Developer Portal: https://momodeveloper.mtn.com/
+
+# Your Primary Key (Subscription Key) - use this as the main key
+MTN_MOMO_PRIMARY_KEY=your-primary-key-here
+
+# Your Secondary Key (optional backup)
+MTN_MOMO_SECONDARY_KEY=your-secondary-key-here
+
+# API User ID (Get from createApiUser() or MTN MoMo dashboard)
+MTN_MOMO_API_USER_ID=your-api-user-id-here
+
+# API Key (Generated for your API User)
+MTN_MOMO_API_KEY=your-api-key-here
+
+# Subscription Key (Usually same as PRIMARY_KEY)
+MTN_MOMO_SUBSCRIPTION_KEY=your-subscription-key-here
+
+# Your application URL (for MoMo callbacks)
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+
+# ============================================================
+# Twilio SMS Configuration
+# ============================================================
+# Get these from Twilio Console: https://www.twilio.com/console
+
+# Your Twilio Account SID (from console dashboard)
+TWILIO_ACCOUNT_SID=your-account-sid-here
+
+# Your Twilio Auth Token (KEEP SECRET - never commit to git!)
+TWILIO_AUTH_TOKEN=your-auth-token-here
+
+# Your Twilio Phone Number (the number customers will see SMS from)
+# Format: +1234567890
+TWILIO_PHONE_NUMBER=+1234567890
+
+# ============================================================
 # Optional: Additional Configuration
 # ============================================================
 
@@ -59,6 +97,17 @@ SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhY
    - Project URL → `NEXT_PUBLIC_SUPABASE_URL`
    - Anon Public Key → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
    - Service Role Secret → `SUPABASE_SERVICE_ROLE_KEY`
+
+### Twilio SMS Configuration
+1. Go to https://www.twilio.com/console
+2. Sign in or create a Twilio account (free trial available)
+3. Copy your **Account SID** → `TWILIO_ACCOUNT_SID`
+4. Copy your **Auth Token** → `TWILIO_AUTH_TOKEN`
+5. Get a phone number:
+   - Click "Phone Numbers" in sidebar
+   - Click "Buy a Number" or use your trial number
+   - Copy the number → `TWILIO_PHONE_NUMBER` (format: +1234567890)
+6. Note: Messages sent from your booking page will be sent as SMS using these credentials
 
 ## Security Notes
 
@@ -133,6 +182,10 @@ SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 | `NEXT_PUBLIC_SUPABASE_URL` | `.env.local` | ✓ | ✗ | Supabase project URL |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | `.env.local` | ✓ | ✗ | Supabase public key |
 | `SUPABASE_SERVICE_ROLE_KEY` | `.env.local` | ✓ | ✓ | Supabase server-side key |
+| `MTN_MOMO_PRIMARY_KEY` | `.env.local` | ✓ | ✓ | MTN MoMo subscription key |
+| `MTN_MOMO_API_USER_ID` | `.env.local` | ✓ | ✓ | MTN MoMo API user ID |
+| `MTN_MOMO_API_KEY` | `.env.local` | ✓ | ✓ | MTN MoMo API key |
+| `NEXT_PUBLIC_APP_URL` | `.env.local` | ✓ | ✗ | Your app URL for callbacks |
 
 ---
 

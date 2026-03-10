@@ -18,6 +18,7 @@ export default function LoginPage() {
 
   const [adminCreds, setAdminCreds] = useState({ username: "", password: "" })
   const [employeeCreds, setEmployeeCreds] = useState({ username: "", password: "" })
+  const [managerCreds, setManagerCreds] = useState({ username: "", password: "" })
   const [tenantCreds, setTenantCreds] = useState({ email: "", password: "" })
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -207,6 +208,72 @@ export default function LoginPage() {
     }
   }
 
+  // Manager Login
+  const handleManagerLogin = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError("")
+    setLoading(true)
+
+    try {
+      if (!managerCreds.username || !managerCreds.password) {
+        setError("Please enter username and password")
+        setLoading(false)
+        return
+      }
+
+      console.log("🔐 Attempting manager login with:", managerCreds.username)
+
+      const { data: allManagers, error: allError } = await supabase
+        .from("managers")
+        .select("*")
+
+      console.log("All managers:", allManagers)
+
+      if (allError) {
+        console.error("❌ Query error:", allError)
+        setError(`Login failed: ${allError.message}`)
+        setLoading(false)
+        return
+      }
+
+      if (!allManagers || allManagers.length === 0) {
+        setError("Invalid username or password")
+        setLoading(false)
+        return
+      }
+
+      const manager = allManagers.find(
+        (mgr) =>
+          mgr.username.trim() === managerCreds.username.trim() &&
+          mgr.password.trim() === managerCreds.password.trim()
+      )
+
+      if (!manager) {
+        console.error("❌ No manager found with matching credentials")
+        setError("Invalid username or password")
+        setLoading(false)
+        return
+      }
+
+      // Check if manager is active
+      if (manager.status !== "active") {
+        console.error("❌ Manager account is inactive")
+        setError("Your account has been deactivated. Contact admin.")
+        setLoading(false)
+        return
+      }
+
+      console.log("✅ Manager login successful!")
+      localStorage.setItem("manager_session", JSON.stringify(manager))
+      setManagerCreds({ username: "", password: "" })
+      router.push("/manager/dashboard")
+    } catch (err) {
+      console.error("❌ Login error:", err)
+      setError("An unexpected error occurred")
+      setLoading(false)
+    }
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-blue-100 p-4">
       <Card className="w-full max-w-md shadow-xl border-0">
@@ -227,12 +294,18 @@ export default function LoginPage() {
           )}
 
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid w-full grid-cols-3 mb-6 bg-slate-100 p-1 rounded-lg">
+            <TabsList className="grid w-full grid-cols-4 mb-6 bg-slate-100 p-1 rounded-lg">
               <TabsTrigger 
                 value="admin"
                 className="data-[state=active]:bg-white data-[state=active]:text-blue-600 rounded text-xs sm:text-sm"
               >
                 Admin
+              </TabsTrigger>
+              <TabsTrigger 
+                value="manager"
+                className="data-[state=active]:bg-white data-[state=active]:text-orange-600 rounded text-xs sm:text-sm"
+              >
+                Manager
               </TabsTrigger>
               <TabsTrigger 
                 value="employee"
@@ -319,6 +392,55 @@ export default function LoginPage() {
                 >
                   {loading ? "Signing in..." : "Employee Login"}
                 </Button>
+
+                <div className="text-center pt-2">
+                  <Link href="/employee/forgot-password" className="text-purple-600 hover:text-purple-700 text-sm font-medium">
+                    Forgot password?
+                  </Link>
+                </div>
+              </form>
+            </TabsContent>
+
+            {/* Manager Login Tab */}
+            <TabsContent value="manager" className="space-y-4">
+              <form onSubmit={handleManagerLogin} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Username</label>
+                  <Input
+                    type="text"
+                    value={managerCreds.username}
+                    onChange={(e) => setManagerCreds({ ...managerCreds, username: e.target.value })}
+                    placeholder="Enter manager username"
+                    disabled={loading}
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Password</label>
+                  <Input
+                    type="password"
+                    value={managerCreds.password}
+                    onChange={(e) => setManagerCreds({ ...managerCreds, password: e.target.value })}
+                    placeholder="Enter manager password"
+                    disabled={loading}
+                    required
+                  />
+                </div>
+
+                <Button 
+                  type="submit" 
+                  className="w-full bg-orange-600 hover:bg-orange-700 text-white font-medium"
+                  disabled={loading}
+                >
+                  {loading ? "Signing in..." : "Manager Login"}
+                </Button>
+
+                <div className="text-center pt-2">
+                  <Link href="/manager/forgot-password" className="text-orange-600 hover:text-orange-700 text-sm font-medium">
+                    Forgot password?
+                  </Link>
+                </div>
               </form>
             </TabsContent>
 
@@ -356,6 +478,12 @@ export default function LoginPage() {
                 >
                   {loading ? "Signing in..." : "Tenant Login"}
                 </Button>
+
+                <div className="text-center pt-2">
+                  <Link href="/tenant/forgot-password" className="text-green-600 hover:text-green-700 text-sm font-medium">
+                    Forgot password?
+                  </Link>
+                </div>
               </form>
 
               <div className="pt-2 border-t">

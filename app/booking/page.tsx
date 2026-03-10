@@ -67,11 +67,23 @@ export default function BookingPage() {
     setLoading(true)
 
     try {
+      // Find the selected apartment to get its type
+      const selectedApartment = apartments.find(
+        (apt) => apt.id === parseInt(formData.apartment_id)
+      )
+
+      if (!selectedApartment) {
+        alert("Please select a valid apartment")
+        setLoading(false)
+        return
+      }
+
       const bookingData = {
         client_name: formData.client_name,
         email: formData.client_email,
         phone_number: formData.client_phone,
         apartment_id: parseInt(formData.apartment_id),
+        apartment_type: selectedApartment.type,
         start_date: formData.move_in_date,
         end_date: formData.move_out_date,
         status: "pending",
@@ -88,7 +100,27 @@ export default function BookingPage() {
         return
       }
 
-      alert("Booking submitted successfully!")
+      // Send SMS confirmation
+      try {
+        const smsResponse = await fetch("/api/bookings/send-sms", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            phone_number: formData.client_phone,
+            client_name: formData.client_name,
+          }),
+        })
+
+        if (!smsResponse.ok) {
+          console.warn("SMS sending failed, but booking was successful")
+        }
+      } catch (smsError) {
+        console.warn("Failed to send SMS confirmation:", smsError)
+      }
+
+      alert("Booking submitted successfully! You will receive an SMS confirmation shortly.")
       setSuccess(true)
       setFormData({
         client_name: "",

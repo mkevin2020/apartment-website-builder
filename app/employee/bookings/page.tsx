@@ -166,25 +166,54 @@ export default function EmployeeBookingsPage() {
       return;
     }
 
+    // Validate booking data
+    if (!booking.tenant_id || !booking.apartment_id || !booking.id) {
+      console.error("Missing required booking data:", {
+        tenant_id: booking.tenant_id,
+        apartment_id: booking.apartment_id,
+        booking_id: booking.id
+      });
+      alert("Missing required booking information. Please refresh and try again.");
+      return;
+    }
+
     setMarkingOccupied(booking.id);
     try {
+      const occupiedDate = new Date().toISOString().split("T")[0];
+      const insertPayload = {
+        apartment_id: booking.apartment_id,
+        booking_id: booking.id,
+        tenant_id: booking.tenant_id.toString(), // Ensure it's a string
+        marked_by_employee_id: employeeDbId,
+        occupied_date: occupiedDate,
+        notes: `Marked occupied by employee ${employee?.full_name} for tenant: ${booking.client_name}`,
+      };
+
+      console.log("About to insert occupied apartment with payload:", insertPayload);
+
       // 1. Create entry in occupied_apartments table
       const { error: occupiedError, data: occupiedData } = await supabase
         .from("occupied_apartments")
-        .insert([
-          {
-            apartment_id: booking.apartment_id,
-            booking_id: booking.id,
-            tenant_id: booking.tenant_id,
-            marked_by_employee_id: employeeDbId,
-            occupied_date: new Date().toISOString().split("T")[0],
-            notes: `Marked occupied by employee ${employee?.full_name} for tenant: ${booking.client_name}`,
-          },
-        ]);
+        .insert([insertPayload]);
 
       if (occupiedError) {
+        // Log error with safe property access
         console.error("Occupied apartments insert error:", occupiedError);
-        alert("Error marking apartment as occupied: " + occupiedError.message);
+        console.error("Error details:", {
+          message: occupiedError?.message,
+          code: occupiedError?.code,
+          details: occupiedError?.details,
+          hint: occupiedError?.hint,
+          status: occupiedError?.status,
+        });
+        console.error("Insert data being sent:", {
+          apartment_id: booking.apartment_id,
+          booking_id: booking.id,
+          tenant_id: booking.tenant_id,
+          marked_by_employee_id: employeeDbId,
+          occupied_date: new Date().toISOString().split("T")[0],
+        });
+        alert("Error marking apartment as occupied: " + (occupiedError?.message || JSON.stringify(occupiedError)));
         setMarkingOccupied(null);
         return;
       }

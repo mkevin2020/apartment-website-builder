@@ -22,21 +22,69 @@ interface ChatWidgetProps {
 export function ChatWidget({ onSessionCreated }: ChatWidgetProps) {
   const { theme, setTheme } = useTheme();
   const [isOpen, setIsOpen] = useState(false);
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      sender_role: "assistant",
-      message: "Hello! 👋 I'm your Cielo Vista apartment assistant. How can I help you today? I can answer questions about availability, pricing, bookings, apartment rules, maintenance, and more.",
-    },
-  ]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [sessionId, setSessionId] = useState<string>("");
+  const [userRole, setUserRole] = useState<string>("visitor");
+  const [userName, setUserName] = useState<string>("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Initialize or get existing session
   useEffect(() => {
     const initializeSession = async () => {
       try {
+        // Detect user role and name from localStorage
+        let role = "visitor";
+        let name = "";
+
+        // Check for admin
+        const adminSession = localStorage.getItem("admin_session");
+        if (adminSession) {
+          try {
+            const admin = JSON.parse(adminSession);
+            role = "admin";
+            name = admin.full_name || "Admin";
+          } catch (e) {
+            console.log("Admin session parse error");
+          }
+        }
+
+        // Check for employee
+        const employeeSession = localStorage.getItem("employee_session");
+        if (employeeSession && role === "visitor") {
+          try {
+            const employee = JSON.parse(employeeSession);
+            role = "employee";
+            name = employee.full_name || "Employee";
+          } catch (e) {
+            console.log("Employee session parse error");
+          }
+        }
+
+        // Check for tenant
+        const tenantSession = localStorage.getItem("tenant_session");
+        if (tenantSession && role === "visitor") {
+          try {
+            const tenant = JSON.parse(tenantSession);
+            role = "tenant";
+            name = tenant.full_name || "Tenant";
+          } catch (e) {
+            console.log("Tenant session parse error");
+          }
+        }
+
+        setUserRole(role);
+        setUserName(name);
+
+        // Start with generic greeting
+        setMessages([
+          {
+            sender_role: "assistant",
+            message: "Hello! 👋 I'm your Cielo Vista apartment assistant. How can I help you today? I can answer questions about availability, pricing, bookings, apartment rules, maintenance, and more.",
+          },
+        ]);
+
         const storedSessionId = localStorage.getItem("chat_session_id");
         const storedSessionTime = localStorage.getItem("chat_session_time");
         const now = Date.now();
@@ -52,10 +100,14 @@ export function ChatWidget({ onSessionCreated }: ChatWidgetProps) {
           return;
         }
 
-        // Create new session
+        // Create new session with user info
         const response = await fetch("/api/chat/session", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            user_role: role,
+            user_name: name,
+          }),
         });
 
         const data = await response.json();
@@ -67,6 +119,12 @@ export function ChatWidget({ onSessionCreated }: ChatWidgetProps) {
         }
       } catch (error) {
         console.error("Failed to initialize chat session:", error);
+        setMessages([
+          {
+            sender_role: "assistant",
+            message: "Hello! 👋 I'm your Cielo Vista apartment assistant. How can I help you today? I can answer questions about availability, pricing, bookings, apartment rules, maintenance, and more.",
+          },
+        ]);
       }
     };
 

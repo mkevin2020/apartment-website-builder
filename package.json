@@ -1,14 +1,16 @@
 {
-  "name": "my-v0-project",
+  "name": "cielo vista",
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "node scripts/dev-open.js",
+    "dev-no-open": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint ."
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "@hookform/resolvers": "^3.10.0",
     "@radix-ui/react-accordion": "1.2.2",
     "@radix-ui/react-alert-dialog": "1.1.4",
@@ -50,6 +52,7 @@
     "lucide-react": "^0.454.0",
     "next": "^16.1.0-canary.0",
     "next-themes": "^0.4.6",
+    "openai": "^4.52.0",
     "react": "19.2.0",
     "react-day-picker": "9.8.0",
     "react-dom": "19.2.0",
@@ -59,6 +62,8 @@
     "sonner": "^1.7.4",
     "tailwind-merge": "^3.3.1",
     "tailwindcss-animate": "^1.0.7",
+    "twilio": "^5.12.2",
+    "uuid": "^13.0.0",
     "vaul": "^1.1.2",
     "zod": "3.25.76"
   },
@@ -67,7 +72,6 @@
     "@types/node": "^22",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "baseline-browser-mapping": "^2.9.13",
     "glob": "^13.0.0",
     "postcss": "^8.5",
     "tailwindcss": "^4.1.9",

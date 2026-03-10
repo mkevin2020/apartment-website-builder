@@ -99,6 +99,12 @@ export default function TenantLoginPage() {
             </Button>
 
             <div className="text-center text-sm text-gray-600">
+              <Link href="/tenant/forgot-password" className="text-blue-600 hover:underline">
+                Forgot password?
+              </Link>
+            </div>
+
+            <div className="text-center text-sm text-gray-600">
               Don't have an account?{" "}
               <Link href="/tenant/signup" className="text-blue-600 hover:underline">
                 Sign up here

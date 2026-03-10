@@ -32,24 +32,35 @@
 
 .chatWindow {
   position: absolute;
-  bottom: 80px;
+  bottom: 120px;
   right: 0;
-  width: 400px;
-  max-width: 90vw;
-  height: 600px;
-  max-height: 70vh;
+  width: 380px;
+  max-width: 95vw;
+  height: 320px;
+  max-height: 80vh;
   background: white;
-  border-radius: 12px;
-  box-shadow: 0 5px 40px rgba(0, 0, 0, 0.16);
+  border-radius: 16px;
+  box-shadow: 
+    0 20px 60px rgba(0, 0, 0, 0.25), 
+    0 10px 30px rgba(59, 130, 246, 0.2),
+    -5px 5px 0 rgba(0, 0, 0, 0.1);
   display: flex;
   flex-direction: column;
   overflow: hidden;
   animation: slideUp 0.3s ease-out;
+  transform: perspective(1200px) rotateY(0deg) rotateX(2deg);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(10px);
 }
 
 .chatWindow.dark {
   background: #1f2937;
   color: #f3f4f6;
+  border: 1px solid rgba(79, 70, 229, 0.3);
+  box-shadow: 
+    0 20px 60px rgba(0, 0, 0, 0.4), 
+    0 10px 30px rgba(79, 70, 229, 0.15),
+    -5px 5px 0 rgba(0, 0, 0, 0.2);
 }
 
 @keyframes slideUp {
@@ -237,8 +248,9 @@
 @media (max-width: 640px) {
   .chatWindow {
     width: calc(100% - 20px);
-    height: 60vh;
+    height: 35vh;
     bottom: 80px;
+    transform: perspective(1000px) rotateY(0deg) rotateX(2deg);
   }
 
   .messageBubble {

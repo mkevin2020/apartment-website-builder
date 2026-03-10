@@ -1,5 +1,4 @@
--- Migration: Create settings table
--- This table stores application-level settings like master deletion password
+
 
 CREATE TABLE IF NOT EXISTS settings (
   id SERIAL PRIMARY KEY,

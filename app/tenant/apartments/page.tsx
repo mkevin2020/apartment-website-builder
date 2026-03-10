@@ -84,7 +84,7 @@ export default function TenantApartmentsPage() {
         // Fetch available apartments
         const { data: apartmentsData, error: apartmentsError } = await supabase
           .from("apartments")
-          .select("*")
+          .select("id, name, type, description, size_sqm, bedrooms, bathrooms, price_per_month, image_url, is_available, created_at")
           .eq("is_available", true)
           .order("price_per_month", { ascending: true });
 
@@ -92,6 +92,13 @@ export default function TenantApartmentsPage() {
           console.error("Error fetching apartments:", apartmentsError);
           setError("Failed to load apartments");
           return;
+        }
+
+        console.log("=== APARTMENTS FETCHED ===");
+        console.log("Full response:", JSON.stringify(apartmentsData, null, 2));
+        if (apartmentsData && apartmentsData.length > 0) {
+          console.log("First apartment:", JSON.stringify(apartmentsData[0], null, 2));
+          console.log("First apartment type field:", apartmentsData[0].type);
         }
 
         setApartments(apartmentsData || []);
@@ -127,6 +134,14 @@ export default function TenantApartmentsPage() {
         return;
       }
 
+      // Debug logging - show all available keys
+      console.log("=== APARTMENT DATA DEBUG ===");
+      console.log("Full apartment object:", JSON.stringify(apartmentData, null, 2));
+      console.log("Available keys:", Object.keys(apartmentData));
+      console.log("apartmentData.type:", apartmentData.type);
+      console.log("apartmentData.name:", apartmentData.name);
+      console.log("apartmentData.id:", apartmentData.id);
+
       const bookingData = {
         tenant_id: tenant?.id,
         apartment_id: apartmentId,
@@ -136,8 +151,11 @@ export default function TenantApartmentsPage() {
         client_name: tenant?.full_name,
         email: tenant?.email,
         phone_number: tenant?.phone || "",
-        apartment_type: apartmentData.name,
+        apartment_type: apartmentData.type || apartmentData.name || "Unknown",
       };
+
+      console.log("=== BOOKING DATA BEING SENT ===");
+      console.log(JSON.stringify(bookingData, null, 2));
 
       const { data, error } = await supabase
         .from("bookings")
@@ -145,7 +163,10 @@ export default function TenantApartmentsPage() {
         .select();
 
       if (error) {
-        console.error("Booking error:", error);
+        console.error("Full booking error object:", JSON.stringify(error, null, 2));
+        console.error("Error message:", error.message);
+        console.error("Error code:", error.code);
+        console.error("Error details:", error.details);
         
         // If apartment_id column doesn't exist, show helpful message
         if (error.message?.includes("apartment_id")) {
@@ -153,7 +174,7 @@ export default function TenantApartmentsPage() {
             "Database configuration issue: The booking system needs to be initialized. Please contact support."
           );
         } else {
-          setBookingError(`Failed to book apartment: ${error.message}`);
+          setBookingError(`Failed to book apartment: ${error.message || JSON.stringify(error)}`);
         }
         return;
       }

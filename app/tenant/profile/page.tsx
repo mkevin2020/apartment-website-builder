@@ -143,7 +143,7 @@ export default function TenantProfilePage() {
                       setFormData({ ...formData, phone: e.target.value })
                     }
                     disabled={loading}
-                    placeholder="(555) 123-4567"
+                    placeholder="+250 788 352 933"
                   />
                 </div>
 

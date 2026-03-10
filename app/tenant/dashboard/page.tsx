@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import TenantHeader from "@/components/TenantHeader";
 import { ChangePasswordModal } from "@/components/change-password-modal";
+import { TenantPaymentWidget } from "@/components/TenantPaymentWidget";
 import {
   Download,
   FileText,
@@ -37,7 +38,17 @@ interface TenantSession {
   payment_status?: string;
 }
 
+interface Payment {
+  id: number;
+  apartment_id: number;
+  amount: number;
+  status: string;
+  due_date: string;
+  reference_number: string;
+}
+
 interface Apartment {
+  type(arg0: string, type: any): unknown;
   id: string | number;
   name: string;
   unit_number?: string;
@@ -73,6 +84,7 @@ export default function TenantDashboard() {
   const [booking, setBooking] = useState<Booking | null>(null);
   const [apartment, setApartment] = useState<Apartment | null>(null);
   const [availableApartments, setAvailableApartments] = useState<Apartment[]>([]);
+  const [pendingPayments, setPendingPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [bookingForm, setBookingForm] = useState<BookingForm>({
@@ -138,14 +150,34 @@ export default function TenantDashboard() {
         // Fetch available apartments
         const { data: availableData, error: availableError } = await supabase
           .from("apartments")
-          .select("*")
+          .select("id, name, type, description, size_sqm, bedrooms, bathrooms, price_per_month, image_url, is_available, created_at")
           .eq("is_available", true)
           .order("price_per_month", { ascending: true });
 
         if (availableError && availableError.message) {
           console.error("Error fetching available apartments:", availableError.message);
         } else if (availableData) {
+          console.log("=== APARTMENTS FETCHED (Dashboard) ===");
+          console.log("Full response:", JSON.stringify(availableData, null, 2));
+          if (availableData.length > 0) {
+            console.log("First apartment:", JSON.stringify(availableData[0], null, 2));
+            console.log("First apartment type field:", availableData[0].type);
+          }
           setAvailableApartments(availableData);
+        }
+
+        // Fetch pending payments
+        const { data: paymentsData, error: paymentsError } = await supabase
+          .from("tenant_payments")
+          .select("*")
+          .eq("tenant_id", parsedTenant.id)
+          .eq("status", "pending")
+          .order("due_date", { ascending: true });
+
+        if (paymentsError) {
+          console.error("Error fetching payments:", paymentsError);
+        } else if (paymentsData) {
+          setPendingPayments(paymentsData);
         }
       } catch (err) {
         console.error("Error in fetchTenantData:", err);
@@ -194,6 +226,14 @@ export default function TenantDashboard() {
         return;
       }
 
+      // Debug logging - show all available keys
+      console.log("=== APARTMENT DATA DEBUG ===");
+      console.log("Full apartment object:", JSON.stringify(apartmentData, null, 2));
+      console.log("Available keys:", Object.keys(apartmentData));
+      console.log("apartmentData.type:", apartmentData.type);
+      console.log("apartmentData.name:", apartmentData.name);
+      console.log("apartmentData.id:", apartmentData.id);
+
       const bookingData = {
         tenant_id: String(tenant.id),
         apartment_id: apartmentId,
@@ -203,8 +243,11 @@ export default function TenantDashboard() {
         client_name: tenant.full_name,
         email: tenant.email,
         phone_number: tenant.phone || "",
-        apartment_type: apartmentData.name,
+        apartment_type: apartmentData.type || apartmentData.name || "Unknown",
       };
+
+      console.log("=== BOOKING DATA BEING SENT ===");
+      console.log(JSON.stringify(bookingData, null, 2));
 
       const { data, error } = await supabase
         .from("bookings")
@@ -212,7 +255,10 @@ export default function TenantDashboard() {
         .select();
 
       if (error) {
-        console.error("Booking error:", error);
+        console.error("Full booking error object:", JSON.stringify(error, null, 2));
+        console.error("Error message:", error.message);
+        console.error("Error code:", error.code);
+        console.error("Error details:", error.details);
         
         // If apartment_id column doesn't exist, show helpful message
         if (error.message?.includes("apartment_id")) {
@@ -220,7 +266,7 @@ export default function TenantDashboard() {
             "Database configuration issue: The booking system needs to be initialized. Please contact support."
           );
         } else {
-          setBookingError(`Failed to book apartment: ${error.message}`);
+          setBookingError(`Failed to book apartment: ${error.message || JSON.stringify(error)}`);
         }
         return;
       }
@@ -305,6 +351,24 @@ export default function TenantDashboard() {
             Change Password
           </Button>
         </div>
+
+        {/* Pending Payments Alert */}
+        {pendingPayments.length > 0 && (
+          <div className="mb-8 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <div className="flex items-start gap-4">
+              <AlertCircle className="h-5 w-5 text-yellow-600 mt-0.5 flex-shrink-0" />
+              <div className="flex-1">
+                <h3 className="font-semibold text-yellow-900 mb-2">
+                  You have {pendingPayments.length} pending payment{pendingPayments.length !== 1 ? 's' : ''}
+                </h3>
+                <p className="text-sm text-yellow-800">
+                  Total amount due: <strong className="font-bold">{pendingPayments.reduce((sum, p) => sum + (p.amount || 0), 0).toLocaleString()} XOF</strong>
+                </p>
+                <p className="text-sm text-yellow-700 mt-2">See the payment section on the right to make a payment.</p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Quick Stats */}
         {apartment && (
@@ -480,11 +544,29 @@ export default function TenantDashboard() {
 
           {/* Right Column - Quick Actions */}
           <div className="space-y-6">
+            {/* Payment Widget */}
+            {pendingPayments.length > 0 && (
+              <TenantPaymentWidget
+                pendingPayments={pendingPayments}
+                tenantId={tenant.id}
+              />
+            )}
+
             <Card>
               <CardHeader>
                 <CardTitle>Quick Actions</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
+                <Button
+                  asChild
+                  className="w-full justify-start gap-2 bg-green-600 hover:bg-green-700 font-semibold"
+                >
+                  <Link href="/tenant/payments">
+                    <DollarSign className="h-4 w-4" />
+                    Make Payment
+                  </Link>
+                </Button>
+
                 <Button
                   asChild
                   className="w-full justify-start gap-2 bg-blue-600 hover:bg-blue-700"
