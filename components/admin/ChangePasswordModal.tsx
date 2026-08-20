@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { createBrowserClient } from "@supabase/ssr";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -33,11 +32,6 @@ export default function ChangePasswordModal({
     confirmPassword: "",
   });
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -65,33 +59,24 @@ export default function ChangePasswordModal({
     setLoading(true);
 
     try {
-      // Get current admin data from localStorage
-      const adminSession = JSON.parse(
-        localStorage.getItem("admin_session") || "{}"
-      );
+      // Verified and written server-side. The hash is never sent to the browser,
+      // and the account updated is the one in the signed session cookie — not an
+      // id supplied by this component.
+      const res = await fetch("/api/auth/change-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          currentPassword: passwords.currentPassword,
+          newPassword: passwords.newPassword,
+        }),
+      });
 
-      // Verify current password matches
-      if (adminSession.password !== passwords.currentPassword) {
-        setError("Current password is incorrect");
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        setError(body?.error || "Failed to update password");
         setLoading(false);
         return;
       }
-
-      // Update password in database
-      const { error: updateError } = await supabase
-        .from("admin_accounts")
-        .update({ password: passwords.newPassword })
-        .eq("id", adminId);
-
-      if (updateError) {
-        setError("Failed to update password");
-        setLoading(false);
-        return;
-      }
-
-      // Update local session with new password
-      adminSession.password = passwords.newPassword;
-      localStorage.setItem("admin_session", JSON.stringify(adminSession));
 
       // Reset form
       setPasswords({

@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createBrowserClient } from "@supabase/ssr";
+import { dataClient } from "@/lib/data-client";
+import bcrypt from "bcryptjs";
+import { sanitizePhone } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -30,6 +32,16 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Pencil, Trash2, Plus, Search } from "lucide-react";
 
+export const WEEKDAYS = [
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+  "Sunday",
+] as const;
+
 export function EmployeesManager() {
   const [employees, setEmployees] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -47,12 +59,10 @@ export function EmployeesManager() {
     department: "",
     hire_date: "",
     status: "active",
+    day_off: "Sunday",
   });
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
+  const supabase = dataClient();
 
   useEffect(() => {
     fetchEmployees();
@@ -61,10 +71,20 @@ export function EmployeesManager() {
   const fetchEmployees = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
+      // Include each employee's weekly schedule so we can show their day off.
+      let { data, error } = await supabase
         .from("employees")
-        .select("*")
+        .select("*, employee_schedules(weekday, is_off)")
         .order("created_at", { ascending: false });
+
+      if (error) {
+        // employee_schedules table not created yet (scripts/027 not run) —
+        // fall back to a plain list so the page keeps working.
+        ({ data, error } = await supabase
+          .from("employees")
+          .select("*")
+          .order("created_at", { ascending: false }));
+      }
 
       if (error) {
         console.error("Error fetching employees:", error);
@@ -77,12 +97,18 @@ export function EmployeesManager() {
     setLoading(false);
   };
 
+  // The employee's day off = the weekday marked is_off in their schedule.
+  const getDayOff = (employee: any): string | null => {
+    const off = (employee?.employee_schedules || []).find((s: any) => s.is_off);
+    return off?.weekday || null;
+  };
+
   const handleOpenDialog = (employee?: any) => {
     if (employee) {
       setSelectedEmployee(employee);
       setFormData({
         username: employee.username,
-        password: employee.password,
+        password: "", // leave blank — only set a new password if the admin types one
         full_name: employee.full_name,
         email: employee.email || "",
         phone: employee.phone || "",
@@ -90,6 +116,7 @@ export function EmployeesManager() {
         department: employee.department || "",
         hire_date: employee.hire_date || "",
         status: employee.status || "active",
+        day_off: getDayOff(employee) || "Sunday",
       });
     } else {
       setSelectedEmployee(null);
@@ -103,6 +130,7 @@ export function EmployeesManager() {
         department: "",
         hire_date: "",
         status: "active",
+        day_off: "Sunday",
       });
     }
     setIsDialogOpen(true);
@@ -115,27 +143,81 @@ export function EmployeesManager() {
     }
 
     try {
+      // day_off is stored in employee_schedules, not on the employees row.
+      const { day_off, ...employeeFields } = formData;
+
       if (selectedEmployee) {
-        // Update employee
+        // Update employee (only change the password if a new one was entered)
+        const updatePayload: any = {
+          ...employeeFields,
+          updated_at: new Date().toISOString(),
+        };
+        if (formData.password) {
+          updatePayload.password = await bcrypt.hash(formData.password, 10);
+        } else {
+          delete updatePayload.password; // keep existing password
+        }
+
         const { error } = await supabase
           .from("employees")
-          .update({
-            ...formData,
-            updated_at: new Date().toISOString(),
-          })
+          .update(updatePayload)
           .eq("id", selectedEmployee.id);
 
         if (error) {
+          // Renaming an employee onto a username someone else already holds.
+          if (error.code === "23505" || /duplicate key/i.test(error.message || "")) {
+            alert(
+              `The username "${formData.username}" is already taken by another employee.\n\n` +
+                `Please choose a different username.`
+            );
+            return;
+          }
           alert("Error updating employee: " + error.message);
           return;
         }
+
+        await saveDayOff(selectedEmployee.id, day_off);
       } else {
-        // Add new employee
-        const { error } = await supabase.from("employees").insert([formData]);
+        // Add new employee (hashed password)
+        const { data: created, error } = await supabase
+          .from("employees")
+          .insert([{ ...employeeFields, password: await bcrypt.hash(formData.password, 10) }])
+          .select("id")
+          .single();
 
         if (error) {
+          // 23505 = unique violation. Usernames must be unique because employees
+          // log in with them, so say that plainly instead of leaking the raw
+          // Postgres constraint text.
+          if (error.code === "23505" || /duplicate key/i.test(error.message || "")) {
+            alert(
+              `The username "${formData.username}" is already taken by another employee.\n\n` +
+                `Please choose a different username.`
+            );
+            return;
+          }
           alert("Error adding employee: " + error.message);
           return;
+        }
+
+        // Create the full default week (08:00–17:00) with the chosen day off.
+        if (created?.id) {
+          const week = WEEKDAYS.map((weekday) => ({
+            employee_id: created.id,
+            weekday,
+            is_off: weekday === day_off,
+          }));
+          const { error: scheduleError } = await supabase
+            .from("employee_schedules")
+            .upsert(week, { onConflict: "employee_id,weekday" });
+          if (scheduleError) {
+            // Employee was created; schedule table may be missing (scripts/027).
+            console.error("Error creating schedule:", scheduleError);
+            alert(
+              "Employee created, but the work schedule could not be saved. " +
+                "Make sure scripts/027-employee-schedules.sql has been run in Supabase."
+            );
+          }
         }
       }
 
@@ -143,6 +225,26 @@ export function EmployeesManager() {
       await fetchEmployees();
     } catch (err) {
       alert("An error occurred");
+    }
+  };
+
+  // Move the is_off flag to the chosen weekday, keeping any custom hours the
+  // manager already set on the other days.
+  const saveDayOff = async (employeeId: number, dayOff: string) => {
+    const rows = WEEKDAYS.map((weekday) => ({
+      employee_id: employeeId,
+      weekday,
+      is_off: weekday === dayOff,
+    }));
+    const { error } = await supabase
+      .from("employee_schedules")
+      .upsert(rows, { onConflict: "employee_id,weekday" });
+    if (error) {
+      console.error("Error saving day off:", error);
+      alert(
+        "Employee saved, but the day off could not be updated. " +
+          "Make sure scripts/027-employee-schedules.sql has been run in Supabase."
+      );
     }
   };
 
@@ -171,7 +273,7 @@ export function EmployeesManager() {
       .includes(searchTerm.toLowerCase())
   );
 
-  const departments = ["IT", "Maintenance", "Security", "Administration", "Cleaning"];
+  const departments = ["IT", "Maintenance", "Security", "Administration", "Cleaning", "Reception"];
   const positions = ["Manager", "Supervisor", "Technician", "Staff", "Intern"];
   const statuses = ["active", "inactive", "on-leave"];
 
@@ -232,6 +334,9 @@ export function EmployeesManager() {
                     <th className="text-left py-3 px-4 font-semibold text-sm">
                       Status
                     </th>
+                    <th className="text-left py-3 px-4 font-semibold text-sm">
+                      Day Off
+                    </th>
                     <th className="text-right py-3 px-4 font-semibold text-sm">
                       Actions
                     </th>
@@ -245,7 +350,7 @@ export function EmployeesManager() {
                         {employee.username}
                       </td>
                       <td className="py-3 px-4 text-sm font-mono bg-gray-100 px-2 py-1 rounded max-w-xs">
-                        {employee.password || "-"}
+                        ••••••••
                       </td>
                       <td className="py-3 px-4 text-sm">{employee.email || "-"}</td>
                       <td className="py-3 px-4 text-sm">
@@ -266,6 +371,15 @@ export function EmployeesManager() {
                         >
                           {employee.status}
                         </span>
+                      </td>
+                      <td className="py-3 px-4 text-sm">
+                        {getDayOff(employee) ? (
+                          <span className="px-2 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-800">
+                            {getDayOff(employee)}
+                          </span>
+                        ) : (
+                          "-"
+                        )}
                       </td>
                       <td className="py-3 px-4 text-right space-x-2">
                         <Button
@@ -365,9 +479,11 @@ export function EmployeesManager() {
               <div>
                 <label className="block text-sm font-medium mb-2">Phone</label>
                 <Input
+                  type="tel"
+                  inputMode="tel"
                   value={formData.phone}
                   onChange={(e) =>
-                    setFormData({ ...formData, phone: e.target.value })
+                    setFormData({ ...formData, phone: sanitizePhone(e.target.value) })
                   }
                   placeholder="Phone number"
                 />
@@ -455,6 +571,33 @@ export function EmployeesManager() {
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-2">
+                Day Off *
+              </label>
+              <Select
+                value={formData.day_off}
+                onValueChange={(value) =>
+                  setFormData({ ...formData, day_off: value })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select the weekly day off" />
+                </SelectTrigger>
+                <SelectContent>
+                  {WEEKDAYS.map((day) => (
+                    <SelectItem key={day} value={day}>
+                      {day}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-gray-500 mt-1">
+                The weekly rest day. Working hours per day are set by the
+                manager in the Work Schedule.
+              </p>
             </div>
           </div>
 

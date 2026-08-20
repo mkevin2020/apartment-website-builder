@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import bcrypt from "bcryptjs";
+import { sanitizePhone } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,7 +13,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { createBrowserClient } from "@supabase/ssr";
+import { dataClient } from "@/lib/data-client";
 import { Plus, Edit2, Trash2, AlertCircle, CheckCircle } from "lucide-react";
 
 interface Manager {
@@ -43,10 +45,7 @@ export function ManagersManager() {
     department: "",
   });
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL || "",
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
-  );
+  const supabase = dataClient();
 
   // Fetch managers
   useEffect(() => {
@@ -81,18 +80,22 @@ export function ManagersManager() {
       }
 
       if (editingId) {
-        // Update existing manager
+        // Update existing manager (only change the password if a new one was entered)
+        const updatePayload: any = {
+          username: formData.username,
+          email: formData.email,
+          full_name: formData.full_name,
+          phone: formData.phone,
+          department: formData.department,
+          updated_at: new Date().toISOString(),
+        };
+        if (formData.password) {
+          updatePayload.password = await bcrypt.hash(formData.password, 10);
+        }
+
         const { error: updateError } = await supabase
           .from("managers")
-          .update({
-            username: formData.username,
-            password: formData.password,
-            email: formData.email,
-            full_name: formData.full_name,
-            phone: formData.phone,
-            department: formData.department,
-            updated_at: new Date().toISOString(),
-          })
+          .update(updatePayload)
           .eq("id", editingId);
 
         if (updateError) throw updateError;
@@ -103,7 +106,7 @@ export function ManagersManager() {
           .from("managers")
           .insert({
             username: formData.username,
-            password: formData.password,
+            password: await bcrypt.hash(formData.password, 10),
             email: formData.email,
             full_name: formData.full_name,
             phone: formData.phone,
@@ -136,7 +139,7 @@ export function ManagersManager() {
   const handleEdit = (manager: Manager) => {
     setFormData({
       username: manager.username,
-      password: manager.password,
+      password: "", // leave blank — only set a new password if the admin types one
       email: manager.email,
       full_name: manager.full_name,
       phone: manager.phone,
@@ -269,8 +272,9 @@ export function ManagersManager() {
                 <label className="block text-sm font-medium mb-1">Phone</label>
                 <Input
                   type="tel"
+                  inputMode="tel"
                   value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                  onChange={(e) => setFormData({ ...formData, phone: sanitizePhone(e.target.value) })}
                   placeholder="Enter phone number"
                   disabled={loading}
                 />

@@ -2,13 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createBrowserClient } from "@supabase/ssr";
-import TenantHeader from "@/components/TenantHeader";
+import { dataClient } from "@/lib/data-client";
+import { TenantShell } from "@/components/dashboard/TenantShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { AlertCircle, CheckCircle } from "lucide-react";
+import { sanitizePhone } from "@/lib/utils";
 
 export default function TenantProfilePage() {
   const router = useRouter();
@@ -21,10 +22,7 @@ export default function TenantProfilePage() {
     phone: "",
   });
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
+  const supabase = dataClient();
 
   useEffect(() => {
     const tenantData = localStorage.getItem("tenant_session");
@@ -40,6 +38,27 @@ export default function TenantProfilePage() {
       email: parsedTenant.email,
       phone: parsedTenant.phone || "",
     });
+
+    // Pull the full tenant record so every credential is available to display,
+    // even if the saved session only had a few fields.
+    if (parsedTenant.id) {
+      supabase
+        .from("tenants")
+        .select("*")
+        .eq("id", parsedTenant.id)
+        .single()
+        .then(({ data }) => {
+          if (data) {
+            setTenant((prev: any) => ({ ...prev, ...data }));
+            setFormData((prev) => ({
+              full_name: data.full_name ?? prev.full_name,
+              email: data.email ?? prev.email,
+              phone: data.phone ?? prev.phone,
+            }));
+          }
+        });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -72,10 +91,7 @@ export default function TenantProfilePage() {
   if (!tenant) return null;
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <TenantHeader tenant={tenant} />
-
-      <main className="container mx-auto px-4 py-8">
+    <TenantShell tenant={tenant} active="profile">
         <div className="max-w-2xl mx-auto">
           <h1 className="text-3xl font-bold mb-8">Edit Profile</h1>
 
@@ -138,16 +154,60 @@ export default function TenantProfilePage() {
                   </label>
                   <Input
                     type="tel"
+                    inputMode="tel"
                     value={formData.phone}
                     onChange={(e) =>
-                      setFormData({ ...formData, phone: e.target.value })
+                      setFormData({ ...formData, phone: sanitizePhone(e.target.value) })
                     }
                     disabled={loading}
                     placeholder="+250 788 352 933"
                   />
                 </div>
 
-                <div className="flex gap-4 pt-4">
+                {/* All other account credentials (read-only) */}
+              <div className="mt-8 pt-6 border-t border-slate-200 dark:border-slate-700">
+                <h3 className="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-4">
+                  Account Details
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {[
+                    { label: "Username", value: tenant.username },
+                    { label: "Tenant ID", value: tenant.id },
+                    { label: "ID / National ID Number", value: tenant.id_number },
+                    { label: "Date of Birth", value: tenant.date_of_birth },
+                    { label: "Gender", value: tenant.gender },
+                    { label: "Address", value: tenant.address },
+                    { label: "City", value: tenant.city },
+                    { label: "Country", value: tenant.country },
+                    { label: "Occupation", value: tenant.occupation },
+                    { label: "Emergency Contact", value: tenant.emergency_contact },
+                    { label: "Emergency Contact Phone", value: tenant.emergency_contact_phone },
+                    { label: "Payment Status", value: tenant.payment_status },
+                    { label: "Approval Status", value: tenant.approval_status },
+                    {
+                      label: "Member Since",
+                      value: tenant.created_at
+                        ? new Date(tenant.created_at).toLocaleDateString()
+                        : null,
+                    },
+                  ]
+                    .filter(
+                      (f) => f.value !== undefined && f.value !== null && f.value !== ""
+                    )
+                    .map((f) => (
+                      <div key={f.label}>
+                        <p className="text-xs uppercase tracking-wide text-slate-400">
+                          {f.label}
+                        </p>
+                        <p className="font-medium text-slate-900 dark:text-white break-words">
+                          {String(f.value)}
+                        </p>
+                      </div>
+                    ))}
+                </div>
+              </div>
+
+                <div className="flex gap-4 pt-6">
                   <Button type="submit" disabled={loading} className="flex-1">
                     {loading ? "Saving..." : "Save Changes"}
                   </Button>
@@ -163,7 +223,6 @@ export default function TenantProfilePage() {
             </CardContent>
           </Card>
         </div>
-      </main>
-    </div>
+    </TenantShell>
   );
 }

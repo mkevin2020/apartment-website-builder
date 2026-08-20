@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { createBrowserClient } from "@supabase/ssr";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -16,7 +15,7 @@ import { Key } from "lucide-react";
 interface ChangePasswordModalProps {
   isOpen: boolean;
   onClose: () => void;
-  table: "tenants" | "employees";
+  table: "tenants" | "employees" | "managers";
   userId: string;
   onSuccess?: () => void;
 }
@@ -36,11 +35,6 @@ export function ChangePasswordModal({
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [loading, setLoading] = useState(false);
-
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -92,35 +86,21 @@ export function ChangePasswordModal({
       setLoading(true);
       setError("");
 
-      // Get current user data
-      const { data: user, error: fetchError } = await supabase
-        .from(table)
-        .select("*")
-        .eq("id", userId)
-        .single();
+      // Verified and written server-side. The `table` and `userId` props are no
+      // longer what decides which row changes — the signed session cookie is —
+      // so this modal can no longer be pointed at another account.
+      const res = await fetch("/api/auth/change-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          currentPassword: formData.currentPassword,
+          newPassword: formData.newPassword,
+        }),
+      });
 
-      if (fetchError || !user) {
-        setError("Failed to verify user");
-        setLoading(false);
-        return;
-      }
-
-      // Verify current password
-      if (user.password !== formData.currentPassword) {
-        setError("Current password is incorrect");
-        setLoading(false);
-        return;
-      }
-
-      // Update password
-      const { error: updateError } = await supabase
-        .from(table)
-        .update({ password: formData.newPassword })
-        .eq("id", userId);
-
-      if (updateError && updateError.message) {
-        console.error("Error updating password:", updateError.message);
-        setError("Failed to update password");
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        setError(body?.error || "Failed to update password");
         setLoading(false);
         return;
       }

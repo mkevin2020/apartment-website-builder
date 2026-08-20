@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createBrowserClient } from "@supabase/ssr";
+import { dataClient } from "@/lib/data-client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -25,6 +25,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { TableSkeleton } from "@/components/ui/loading-skeletons";
 
 interface TenantRequest {
   id: number;
@@ -55,10 +56,7 @@ export function TenantsManager() {
   const [showDialog, setShowDialog] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
+  const supabase = dataClient();
 
   useEffect(() => {
     const adminData = localStorage.getItem("admin_session");
@@ -119,8 +117,23 @@ export function TenantsManager() {
         return;
       }
 
-      setTenants(tenants.map((t) => 
-        t.id === selectedTenant.id 
+      // Notify the tenant by email (best-effort)
+      try {
+        await fetch("/api/tenants/approval-email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: selectedTenant.email,
+            name: selectedTenant.full_name,
+            status: "approved",
+          }),
+        });
+      } catch (emailErr) {
+        console.error("Failed to send approval email:", emailErr);
+      }
+
+      setTenants(tenants.map((t) =>
+        t.id === selectedTenant.id
           ? { ...t, approval_status: "approved", is_active: true }
           : t
       ));
@@ -151,8 +164,23 @@ export function TenantsManager() {
         return;
       }
 
-      setTenants(tenants.map((t) => 
-        t.id === selectedTenant.id 
+      // Notify the tenant by email (best-effort)
+      try {
+        await fetch("/api/tenants/approval-email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: selectedTenant.email,
+            name: selectedTenant.full_name,
+            status: "rejected",
+          }),
+        });
+      } catch (emailErr) {
+        console.error("Failed to send rejection email:", emailErr);
+      }
+
+      setTenants(tenants.map((t) =>
+        t.id === selectedTenant.id
           ? { ...t, approval_status: "rejected", is_active: false }
           : t
       ));
@@ -168,13 +196,17 @@ export function TenantsManager() {
     if (!selectedTenant || !admin) return;
 
     try {
-      const { error } = await supabase
-        .from("tenants")
-        .delete()
-        .eq("id", selectedTenant.id);
+      // Server-side: frees the tenant's apartment(s) and cleans up bookings/payments
+      const res = await fetch("/api/tenants/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tenantId: selectedTenant.id }),
+      });
+      const data = await res.json();
 
-      if (error) {
-        console.error("Error deleting tenant:", error);
+      if (!res.ok) {
+        console.error("Error deleting tenant:", data.error);
+        alert("Failed to delete tenant: " + (data.error || "Unknown error"));
         return;
       }
 
@@ -182,8 +214,12 @@ export function TenantsManager() {
       setShowDialog(false);
       setSelectedTenant(null);
       setActionType(null);
+      if (data.freedApartments > 0) {
+        alert(`Tenant deleted. ${data.freedApartments} apartment(s) released and now available.`);
+      }
     } catch (err) {
       console.error("Error:", err);
+      alert("An error occurred while deleting the tenant.");
     }
   };
 
@@ -223,14 +259,9 @@ export function TenantsManager() {
   });
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading tenants...</p>
-        </div>
-      </div>
-    );
+    // Skeleton, not a spinner: it occupies the same space the real
+    // content will, so nothing shifts when the data arrives.
+    return <TableSkeleton rows={6} cols={5} />;
   }
 
   return (
@@ -374,7 +405,7 @@ export function TenantsManager() {
                       <div className="md:col-span-2">
                         <p className="text-xs text-gray-500">Password</p>
                         <p className="text-sm font-medium text-gray-900 font-mono bg-gray-100 px-2 py-1 rounded">
-                          {tenant.password}
+                          ••••••••
                         </p>
                       </div>
                     </div>

@@ -1,8 +1,7 @@
-"use client"
+﻿"use client"
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { createBrowserClient } from "@supabase/ssr"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -17,33 +16,28 @@ export default function EmployeeLoginPage() {
     password: "",
   })
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-  )
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
     setLoading(true)
 
     try {
-      const { data, error: queryError } = await supabase
-        .from("employees")
-        .select("*")
-        .eq("email", credentials.email)
-        .eq("password", credentials.password)
-        .single()
+      // Authenticate on the server (bcrypt-verified; password never compared in the browser).
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: credentials.email.trim(), password: credentials.password }),
+      })
+      const data = await res.json()
 
-      if (queryError || !data) {
-        setError("Invalid email or password")
+      if (!res.ok || data.role !== "employee") {
+        setError(data.error || "Invalid email or password")
         setLoading(false)
         return
       }
 
-      // Store employee session
-      localStorage.setItem("employee_session", JSON.stringify(data))
-      router.push("/employee/dashboard")
+      localStorage.setItem("employee_session", JSON.stringify(data.session))
+      router.push(data.redirect || "/employee/dashboard")
     } catch (err) {
       setError("An error occurred. Please try again.")
       setLoading(false)

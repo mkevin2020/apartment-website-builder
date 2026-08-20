@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import * as React from 'react'
 import { Slot } from '@radix-ui/react-slot'
@@ -83,7 +83,12 @@ function SidebarProvider({
       }
 
       // This sets the cookie to keep the sidebar state.
-      document.cookie = `${SIDEBAR_COOKIE_NAME}=${openState}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`
+      // SameSite=Lax stops this riding along on cross-site requests, and
+      // Secure keeps it off plaintext connections. The value is only a boolean
+      // UI preference, but a cookie with no flags is a cookie with no flags.
+      document.cookie =
+        `${SIDEBAR_COOKIE_NAME}=${openState}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}; SameSite=Lax` +
+        (window.location.protocol === "https:" ? "; Secure" : "")
     },
     [setOpenProp, open],
   )

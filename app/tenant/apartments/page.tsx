@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createBrowserClient } from "@supabase/ssr";
+import { dataClient } from "@/lib/data-client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { SessionGuard } from "@/components/auth/session-guard";
 import TenantHeader from "@/components/TenantHeader";
 import {
   Bed,
@@ -19,6 +20,7 @@ import {
   DollarSign,
 } from "lucide-react";
 import Link from "next/link";
+import { CardGridSkeleton, PageSkeleton } from "@/components/ui/loading-skeletons";
 
 interface TenantSession {
   id: string;
@@ -28,6 +30,7 @@ interface TenantSession {
 }
 
 interface Apartment {
+  type(arg0: string, type: any): unknown;
   id: number;
   name: string;
   unit_number?: string;
@@ -64,10 +67,7 @@ export default function TenantApartmentsPage() {
   const [bookingSuccess, setBookingSuccess] = useState<string | null>(null);
   const [bookingError, setBookingError] = useState<string | null>(null);
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
+  const supabase = dataClient();
 
   useEffect(() => {
     const fetchData = async () => {
@@ -184,6 +184,34 @@ export default function TenantApartmentsPage() {
         return;
       }
 
+      // Booking confirmation email (fire-and-forget; failure never blocks the booking)
+      if (tenant?.email) {
+        fetch("/api/bookings/send-email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            client_email: tenant.email,
+            client_name: tenant.full_name,
+            apartment_name: apartmentData.name || apartmentData.type || "Apartment",
+            booking_reference: `BKG-${data[0].id}`,
+            start_date: bookingForm.start_date,
+            move_out_date: bookingForm.end_date,
+            price_per_month: apartmentData.price_per_month || apartmentData.monthly_rent || 0,
+            phone_number: tenant.phone || "",
+          }),
+        }).catch(() => {});
+      }
+
+      // Notify the tenant by SMS that their booking was submitted (IntouchSMS).
+      // Fire-and-forget — safe no-op until the IntouchSMS API key is set.
+      if (tenant?.phone) {
+        fetch("/api/bookings/send-sms", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ phone_number: tenant.phone, client_name: tenant.full_name }),
+        }).catch(() => {});
+      }
+
       setBookingSuccess("Apartment booked successfully! Redirecting to your bookings...");
       setBookingForm({ apartment_id: 0, start_date: "", end_date: "" });
       setSelectedApartment(null);
@@ -201,17 +229,9 @@ export default function TenantApartmentsPage() {
   };
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <TenantHeader tenant={tenant} />
-        <div className="flex items-center justify-center min-h-[60vh]">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-gray-600">Loading apartments...</p>
-          </div>
-        </div>
-      </div>
-    );
+    // Skeleton, not a spinner: it occupies the same space the real
+    // content will, so nothing shifts when the data arrives.
+    return <PageSkeleton label="Loading apartments"><CardGridSkeleton count={6} /></PageSkeleton>;
   }
 
   if (!tenant) {
@@ -219,15 +239,16 @@ export default function TenantApartmentsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-slate-900 transition-colors">
+      <SessionGuard sessionKey="tenant_session" />
       <TenantHeader tenant={tenant} />
 
       <main className="container mx-auto px-4 py-8">
         {/* Header Section */}
         <div className="mb-8 flex items-center justify-between">
           <div>
-            <h1 className="text-4xl font-bold text-gray-900 mb-2">Available Apartments</h1>
-            <p className="text-gray-600">Browse and book from our available apartments</p>
+            <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-2">Available Apartments</h1>
+            <p className="text-gray-600 dark:text-slate-400">Browse and book from our available apartments</p>
           </div>
           <Button asChild variant="outline" className="gap-2">
             <Link href="/tenant/dashboard">
@@ -280,7 +301,7 @@ export default function TenantApartmentsPage() {
                 <CardHeader className="pb-3">
                   <CardTitle className="text-xl">{apt.name}</CardTitle>
                   {apt.unit_number && (
-                    <p className="text-sm text-gray-600">Unit: {apt.unit_number}</p>
+                    <p className="text-sm text-gray-600 dark:text-slate-400">Unit: {apt.unit_number}</p>
                   )}
                   <p className="text-2xl font-bold text-blue-600 mt-2">
                     ${apt.price_per_month || apt.monthly_rent}/month
@@ -313,7 +334,7 @@ export default function TenantApartmentsPage() {
 
                   {/* Description */}
                   {apt.description && (
-                    <p className="text-sm text-gray-600 line-clamp-3">{apt.description}</p>
+                    <p className="text-sm text-gray-600 dark:text-slate-400 line-clamp-3">{apt.description}</p>
                   )}
 
                   {/* Booking Section */}
@@ -325,7 +346,7 @@ export default function TenantApartmentsPage() {
                         </div>
                       )}
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                        <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
                           Move-in Date
                         </label>
                         <Input
@@ -338,7 +359,7 @@ export default function TenantApartmentsPage() {
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                        <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
                           Move-out Date
                         </label>
                         <Input
@@ -389,8 +410,8 @@ export default function TenantApartmentsPage() {
         ) : (
           <Card>
             <CardContent className="pt-12 text-center pb-12">
-              <AlertCircle className="h-12 w-12 text-gray-400 mx-auto mb-3" />
-              <p className="text-gray-600 text-lg mb-4">No apartments available at the moment</p>
+              <AlertCircle className="h-12 w-12 text-gray-400 dark:text-slate-500 mx-auto mb-3" />
+              <p className="text-gray-600 dark:text-slate-400 text-lg mb-4">No apartments available at the moment</p>
               <Button asChild>
                 <Link href="/tenant/dashboard">Back to Dashboard</Link>
               </Button>

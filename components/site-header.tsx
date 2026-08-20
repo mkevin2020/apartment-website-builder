@@ -1,109 +1,105 @@
 "use client"
 
+import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { useTheme } from "next-themes"
+import { Home, Menu, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Building2, Menu, X, Moon, Sun } from "lucide-react"
-import { useState, Suspense, useEffect } from "react"
 
-function SiteHeaderContent() {
+export function SiteHeader() {
   const pathname = usePathname()
-  const { theme, setTheme } = useTheme()
-  const [mounted, setMounted] = useState(false)
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-
-  const isActive = (path: string) => pathname === path
-  const isAdminRoute = pathname?.startsWith("/admin")
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
-
-  if (isAdminRoute) {
-    return null
-  }
+  const [open, setOpen] = useState(false)
 
   const navLinks = [
     { href: "/", label: "Home" },
-    { href: "/apartments", label: "Apartments" },
-    { href: "/booking", label: "Booking" },
-    { href: "/feedback", label: "Contact" },
+    { href: "/apartments", label: "Listings" },
+    { href: "/booking", label: "Book" },
+    { href: "/about", label: "About" },
+    { href: "/contact", label: "Contact", alsoActive: ["/feedback"] },
   ]
 
+  const isActive = (href: string, alsoActive?: string[]) =>
+    pathname === href || (alsoActive?.includes(pathname ?? "") ?? false)
+
   return (
-    <header className="sticky top-0 z-50 w-full border-b bg-white/95 dark:bg-slate-950/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 dark:supports-[backdrop-filter]:bg-slate-950/80 dark:border-slate-800">
-      <div className="container mx-auto flex h-16 items-center justify-between px-4">
+    <header className="fixed top-0 w-full z-50 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 transition-colors">
+      <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2">
-          <Building2 className="h-6 w-6 text-blue-600" />
+          <Home className="h-6 w-6 text-amber-500" />
           <span className="text-xl font-bold text-slate-900 dark:text-white">Cielo Vista</span>
         </Link>
 
-        {/* Desktop Navigation */}
-        <nav className="hidden md:flex items-center gap-6">
-          {navLinks.map((link) => (
+        {/* Desktop nav */}
+        <nav className="hidden md:flex items-center gap-8">
+          {navLinks.map((l) => (
             <Link
-              key={link.href}
-              href={link.href}
-              className={`text-sm font-medium transition-colors hover:text-blue-600 ${
-                isActive(link.href) ? "text-blue-600" : "text-slate-700 dark:text-slate-300"
+              key={l.href}
+              href={l.href}
+              className={`text-sm font-medium transition-colors ${
+                isActive(l.href, l.alsoActive)
+                  ? "text-amber-500"
+                  : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
               }`}
             >
-              {link.label}
+              {l.label}
             </Link>
           ))}
         </nav>
 
-        {/* Dark Mode Toggle + Mobile Menu */}
-        <div className="flex items-center gap-4">
-          {mounted && (
-            <button
-              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-              className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition"
-              aria-label="Toggle theme"
-            >
-              {theme === "dark" ? (
-                <Sun className="h-5 w-5 text-yellow-500" />
-              ) : (
-                <Moon className="h-5 w-5 text-slate-600" />
-              )}
-            </button>
-          )}
-          
-          {/* Mobile Menu Button */}
-          <button className="md:hidden" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
-            {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+        <div className="flex items-center gap-2 sm:gap-4">
+          <Link
+            href="/login"
+            className="hidden md:block text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors"
+          >
+            Log in
+          </Link>
+          <Link href="/tenant/register">
+            <Button className="bg-amber-500 hover:bg-amber-600 text-white shadow-sm transition-all hover:shadow-md">
+              Sign Up
+            </Button>
+          </Link>
+
+          {/* Mobile menu toggle */}
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            aria-label="Toggle menu"
+            aria-expanded={open}
+            className="md:hidden inline-flex items-center justify-center rounded-lg p-2 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+          >
+            {open ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
           </button>
         </div>
       </div>
 
-      {/* Mobile Navigation */}
-      {mobileMenuOpen && (
-        <div className="md:hidden border-t bg-white dark:bg-slate-900 dark:border-slate-800">
-          <nav className="container mx-auto flex flex-col gap-4 p-4">
-            {navLinks.map((link) => (
+      {/* Mobile dropdown nav */}
+      {open && (
+        <nav className="md:hidden border-t border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-950/95 backdrop-blur-md">
+          <div className="max-w-7xl mx-auto px-4 py-3 flex flex-col gap-1">
+            {navLinks.map((l) => (
               <Link
-                key={link.href}
-                href={link.href}
-                className={`text-sm font-medium transition-colors hover:text-blue-600 ${
-                  isActive(link.href) ? "text-blue-600" : "text-slate-700 dark:text-slate-300"
+                key={l.href}
+                href={l.href}
+                onClick={() => setOpen(false)}
+                className={`block rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+                  isActive(l.href, l.alsoActive)
+                    ? "bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400"
+                    : "text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
                 }`}
-                onClick={() => setMobileMenuOpen(false)}
               >
-                {link.label}
+                {l.label}
               </Link>
             ))}
-          </nav>
-        </div>
+            <Link
+              href="/login"
+              onClick={() => setOpen(false)}
+              className="block rounded-lg px-3 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            >
+              Log in
+            </Link>
+          </div>
+        </nav>
       )}
     </header>
-  )
-}
-
-export function SiteHeader() {
-  return (
-    <Suspense fallback={null}>
-      <SiteHeaderContent />
-    </Suspense>
   )
 }
