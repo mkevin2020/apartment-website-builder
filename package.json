@@ -19,7 +19,6 @@
   "scripts": {
     "dev": "node scripts/dev-open.js",
     "dev-no-open": "next dev",
-    "backend": "cd backend && python main.py",
     "build": "node scripts/check-await.mjs && next build",
     "start": "next start",
     "lint": "node scripts/check-await.mjs",

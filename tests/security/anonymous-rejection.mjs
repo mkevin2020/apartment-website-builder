@@ -171,17 +171,25 @@ await check("MoMo DEMO transaction cannot be completed anonymously", async () =>
     : `unexpected status ${res.status}`;
 });
 
-await check("MoMo callback rejects an unverified payload", async () => {
-  // MTN's signature scheme is not implemented yet, so the route must REFUSE
-  // callbacks rather than trust them. If this ever returns 200, verification
-  // was either implemented (update this test) or switched to accept-all.
+await check("MoMo callback cannot complete a payment it invented", async () => {
+  // The callback is deliberately UNAUTHENTICATED — MTN cannot hold a secret of
+  // ours. It is treated as a doorbell: the body only says which transaction id
+  // to ask MTN about, and completion depends on MTN's own API confirming it.
+  //
+  // So the test is not "does it reject", it is "can a forged body move money".
+  // A made-up transaction id must never come back completed.
   const res = await post("/api/payments/mtn-momo/callback", {
-    transactionId: "probe-" + Date.now(),
+    transactionId: "forged-" + Date.now(),
     status: "successful",
+    amount: 999999,
   });
-  return res.status === 401
+  const body = await res.text();
+  if (/"status"\s*:\s*"completed"/.test(body)) {
+    return `a forged callback completed a payment: ${body.slice(0, 200)}`;
+  }
+  return [200, 400, 401].includes(res.status)
     ? true
-    : `unverified callback was not rejected (status ${res.status}) — check MTN_CALLBACK_VERIFICATION`;
+    : `unexpected status ${res.status}`;
 });
 
 await check("card charge route requires a session", async () => {
@@ -215,8 +223,11 @@ const privileged = [
   ["/api/tenants/delete", { tenantId: 1 }],
   ["/api/payments/approve", { paymentId: 1 }],
   ["/api/payments/decline", { paymentId: 1 }],
-  ["/api/intouch/payment", { amount: 1, phone_number: "0780000000", tenant_id: "1", apartment_id: "1", month: "x" }],
-  ["/api/intouch/sms/send", { phone_number: "0780000000", message: "test" }],
+  // NOTE: /api/intouch/* and the FastAPI service were removed — this project
+  // uses IntouchSMS only, and SMS is sent directly from lib/intouch-sms.ts.
+  // The route below is the real SMS-sending surface and must stay staff-only,
+  // because it spends real money on the business's SMS credit.
+  ["/api/bookings/send-sms", { bookingId: 1, message: "test" }],
   ["/api/admin/regenerate-qr", {}],
   ["/api/auth/change-password", { currentPassword: "x", newPassword: "yyyyyyyy" }],
 ];

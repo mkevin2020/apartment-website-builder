@@ -89,3 +89,29 @@ export async function completeEvent(
     console.error("[provider-events] could not finalise event:", err);
   }
 }
+
+/**
+ * Give a claim back.
+ *
+ * Needed when an event was claimed but turned out to be non-final — e.g. the
+ * MoMo callback fires, we ask MTN, and MTN says the transaction is still
+ * processing. Without releasing, the (provider, event_id) row stays and MTN's
+ * NEXT retry — the one that would have told us the payment settled — is
+ * discarded as a duplicate, and the payment never completes.
+ *
+ * Only release events that changed nothing.
+ */
+export async function releaseEvent(provider: Provider, eventId: string): Promise<void> {
+  if (!eventId) return;
+  try {
+    await supabase
+      .from("provider_events")
+      .delete()
+      .eq("provider", provider)
+      .eq("event_id", eventId)
+      // Never release something already acted on.
+      .is("processed_at", null);
+  } catch (err) {
+    console.error("[provider-events] could not release claim:", err);
+  }
+}
