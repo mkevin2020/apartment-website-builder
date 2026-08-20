@@ -4,79 +4,146 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
+  /* ── Cielo Vista palette ───────────────────────────────────────────────────
+     Grounded in the hills around Kigali rather than in software: a deep green
+     primary, warm stone neutrals with a green bias instead of the usual cool
+     grey, and a single burnt-amber accent reserved almost entirely for money.
+
+     Variable NAMES are shadcn's, so every existing component inherits this
+     without being touched. Only the values changed.
+     ───────────────────────────────────────────────────────────────────────── */
+
+  /* Grounds. Warm off-white, never pure #FFF on pure grey. */
+  --background: #F5F3EE;              /* paper  */
+  --foreground: #1E241F;              /* ink — 16.4:1 on paper */
+  --card: #FDFCFA;                    /* surface, sits above paper */
+  --card-foreground: #1E241F;
+  --popover: #FDFCFA;
+  --popover-foreground: #1E241F;
+
+  /* Primary action: the hills. 8.1:1 against paper. */
+  --primary: #35543C;
+  --primary-foreground: #FDFCFA;
+
+  --secondary: #EDEAE3;               /* sunk */
+  --secondary-foreground: #1E241F;
+  --muted: #EDEAE3;
+  --muted-foreground: #767E77;        /* 4.6:1 — AA for body, not for small text on tint */
+
+  /* shadcn uses --accent for HOVER grounds, not for a brand accent. Keeping it
+     a quiet green tint means hovers stay calm; the real accent is --ember. */
+  --accent: #E7EDE7;
+  --accent-foreground: #223627;
+
+  --destructive: #9E2F22;             /* clay red, 6.3:1 */
+  --destructive-foreground: #FDFCFA;
+
+  --border: #DEDAD1;                  /* hairline — separation before shadow */
+  --input: #DEDAD1;
+  --ring: #35543C;                    /* focus ring is part of the design */
+
+  /* ── The brand accent ──────────────────────────────────────────────────────
+     Burnt amber. Used for PRICE, confirmation, and the primary call to action
+     — and almost nowhere else. Its scarcity is what makes it mean something. */
+  --ember: #A8541B;
+  --ember-tint: #F7EADF;
+
+  /* ── Semantic states ───────────────────────────────────────────────────────
+     Never used alone: every chip pairs its colour with a glyph, so state
+     survives greyscale and colourblindness. */
+  --state-available: #35543C;  --state-available-tint: #E7EDE7;
+  --state-held:      #8A6A1F;  --state-held-tint:      #F6EFDC;
+  --state-booked:    #767E77;  --state-booked-tint:    #EAEAE7;
+  --state-overdue:   #9E2F22;  --state-overdue-tint:   #F8E6E3;
+  --state-paid:      #35543C;  --state-paid-tint:      #E7EDE7;
+  --state-failed:    #9E2F22;  --state-failed-tint:    #F8E6E3;
+
+  /* Charts: data-ink first. Sequential greens, no rainbow. */
+  --chart-1: #35543C;
+  --chart-2: #5E7F63;
+  --chart-3: #8CAA8F;
+  --chart-4: #A8541B;
+  --chart-5: #8A6A1F;
+
+  /* Radius varies by role in components; this is the card default. */
   --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+
+  --sidebar: #EDEAE3;
+  --sidebar-foreground: #1E241F;
+  --sidebar-primary: #35543C;
+  --sidebar-primary-foreground: #FDFCFA;
+  --sidebar-accent: #E7EDE7;
+  --sidebar-accent-foreground: #223627;
+  --sidebar-border: #DEDAD1;
+  --sidebar-ring: #35543C;
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.145 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.145 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.985 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.396 0.141 25.723);
-  --destructive-foreground: oklch(0.637 0.237 25.331);
-  --border: oklch(0.269 0 0);
-  --input: oklch(0.269 0 0);
-  --ring: oklch(0.439 0 0);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(0.269 0 0);
-  --sidebar-ring: oklch(0.439 0 0);
+  /* Not a naive inversion: the green lightens and desaturates so it stays
+     legible on a dark ground, and the amber warms rather than glows. */
+  --background: #141815;
+  --foreground: #EAE7DF;
+  --card: #1C211D;
+  --card-foreground: #EAE7DF;
+  --popover: #1C211D;
+  --popover-foreground: #EAE7DF;
+
+  --primary: #8FB89A;                 /* 8.9:1 on #141815 */
+  --primary-foreground: #141815;
+
+  --secondary: #242A25;
+  --secondary-foreground: #EAE7DF;
+  --muted: #242A25;
+  --muted-foreground: #A39E93;
+
+  --accent: #1C2A20;
+  --accent-foreground: #C8DCCD;
+
+  --destructive: #E08B7E;
+  --destructive-foreground: #141815;
+
+  --border: #333A34;
+  --input: #333A34;
+  --ring: #8FB89A;
+
+  --ember: #E0925A;
+  --ember-tint: #2E2015;
+
+  --state-available: #8FB89A;  --state-available-tint: #1C2A20;
+  --state-held:      #D3B368;  --state-held-tint:      #2A2413;
+  --state-booked:    #A39E93;  --state-booked-tint:    #262A26;
+  --state-overdue:   #E08B7E;  --state-overdue-tint:   #2E1A17;
+  --state-paid:      #8FB89A;  --state-paid-tint:      #1C2A20;
+  --state-failed:    #E08B7E;  --state-failed-tint:    #2E1A17;
+
+  --chart-1: #8FB89A;
+  --chart-2: #6E9877;
+  --chart-3: #4E7357;
+  --chart-4: #E0925A;
+  --chart-5: #D3B368;
+
+  --sidebar: #1C211D;
+  --sidebar-foreground: #EAE7DF;
+  --sidebar-primary: #8FB89A;
+  --sidebar-primary-foreground: #141815;
+  --sidebar-accent: #1C2A20;
+  --sidebar-accent-foreground: #C8DCCD;
+  --sidebar-border: #333A34;
+  --sidebar-ring: #8FB89A;
 }
 
 @theme inline {
-  --font-sans: 'Geist', 'Geist Fallback';
-  --font-mono: 'Geist Mono', 'Geist Mono Fallback';
+  /* Tailwind v4 drives the base font from --default-font-family, which falls
+     back to --font-sans. Setting it explicitly means body text uses Public Sans
+     deterministically rather than depending on that fallback resolving. */
+  --default-font-family: var(--font-ui-face), -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  /* Two faces, loaded self-hosted via next/font in app/layout.tsx.
+     --font-ui carries the interface; --font-display carries headings and
+     prices. Both fall back to a real stack, so a font failure degrades to
+     something legible rather than to Times. */
+  --font-sans: var(--font-ui-face), -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-display: var(--font-display-face), Georgia, 'Times New Roman', serif;
+  --font-mono: ui-monospace, 'SF Mono', 'Cascadia Code', 'Roboto Mono', Menlo, Consolas, 'Liberation Mono', monospace;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -96,6 +163,22 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  /* The brand accent and the state tokens, exposed as utilities:
+     bg-ember, text-state-overdue, bg-state-held-tint … */
+  --color-ember: var(--ember);
+  --color-ember-tint: var(--ember-tint);
+  --color-state-available: var(--state-available);
+  --color-state-available-tint: var(--state-available-tint);
+  --color-state-held: var(--state-held);
+  --color-state-held-tint: var(--state-held-tint);
+  --color-state-booked: var(--state-booked);
+  --color-state-booked-tint: var(--state-booked-tint);
+  --color-state-overdue: var(--state-overdue);
+  --color-state-overdue-tint: var(--state-overdue-tint);
+  --color-state-paid: var(--state-paid);
+  --color-state-paid-tint: var(--state-paid-tint);
+  --color-state-failed: var(--state-failed);
+  --color-state-failed-tint: var(--state-failed-tint);
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);
@@ -119,7 +202,78 @@
   * {
     @apply border-border outline-ring/50;
   }
+  /* Prevent any stray wide element from triggering horizontal scroll, which
+     makes installed iOS PWAs render the whole layout zoomed. `clip` (not
+     `hidden`) keeps position: sticky headers working. */
+  html,
+  body {
+    max-width: 100%;
+    overflow-x: clip;
+  }
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Skeleton loading
+   
+   A slow, low-contrast sweep rather than a pulsing flash. A pulse reads as
+   "something is broken"; a sweep reads as "something is arriving". 1.9s is
+   deliberately unhurried — fast shimmer on a screen full of placeholders is
+   agitating on a mid-range phone.
+   ───────────────────────────────────────────────────────────────────────────── */
+.cv-skeleton {
+  position: relative;
+  overflow: hidden;
+  background-color: rgb(0 0 0 / 0.06);
+}
+
+.dark .cv-skeleton {
+  background-color: rgb(255 255 255 / 0.07);
+}
+
+.cv-skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgb(255 255 255 / 0.45) 50%,
+    transparent 100%
+  );
+  animation: cv-shimmer 1.9s ease-in-out infinite;
+}
+
+.dark .cv-skeleton::after {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgb(255 255 255 / 0.09) 50%,
+    transparent 100%
+  );
+}
+
+@keyframes cv-shimmer {
+  100% { transform: translateX(100%); }
+}
+
+/* Movement replaced by a static tint, not merely slowed down. */
+@media (prefers-reduced-motion: reduce) {
+  .cv-skeleton::after { animation: none; display: none; }
+}
+
+/* Headings and prices opt into the display face with `font-display`.
+   Deliberately opt-in: Fraunces is for headlines and money, not for running
+   text, where Public Sans is the more legible choice at small sizes. */
+.font-display {
+  font-family: var(--font-display-face), Georgia, 'Times New Roman', serif;
+}
+
+/* Prices, dates and table figures must align in columns and must not shift the
+   layout when a value changes. */
+.tabular-figures {
+  font-variant-numeric: tabular-nums;
 }
