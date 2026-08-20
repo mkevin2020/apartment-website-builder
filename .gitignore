@@ -12,10 +12,22 @@ out/
 build/
 dist/
 
-# Environment
+# Environment — .env.example is the ONLY env file that may be committed
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
+
+# Secrets and scratch files that tend to capture tokens
+*.tmp
+*.pem
+*.key
+*.p12
+*.pfx
+secrets.json
+
+# Local database dumps (contain live tenant PII)
+*.dump
+DATABASE_COMPLETE_BACKUP.sql
 
 # OS
 .DS_Store
@@ -24,3 +36,16 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
+.vercel
+
+# Python — the FastAPI service in backend/
+# Two virtualenvs live in this tree (backend/venv and .venv), ~75 MB of
+# vendored packages between them. Neither is tracked, but without these rules
+# they sit there as untracked noise and are one careless `git add -A` away from
+# being committed.
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
