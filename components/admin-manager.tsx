@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { createBrowserClient } from "@supabase/ssr";
+import { dataClient } from "@/lib/data-client";
+import bcrypt from "bcryptjs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -58,10 +59,7 @@ export function AdminManager() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSettingsSubmitting, setIsSettingsSubmitting] = useState(false);
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
+  const supabase = dataClient();
 
   const fetchAdmins = async () => {
     try {
@@ -192,13 +190,13 @@ export function AdminManager() {
         return;
       }
 
-      // Insert new admin
+      // Insert new admin (hashed password)
       const { error: insertError } = await supabase
         .from("admin_accounts")
         .insert([
           {
             username: formData.username,
-            password: formData.password,
+            password: await bcrypt.hash(formData.password, 10),
             full_name: formData.full_name,
           },
         ]);

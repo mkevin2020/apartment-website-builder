@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createBrowserClient } from "@supabase/ssr";
+import { dataClient } from "@/lib/data-client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { formatDate } from "@/lib/utils";
+import { SessionGuard } from "@/components/auth/session-guard";
 import {
   AlertCircle,
   CheckCircle,
@@ -17,6 +19,7 @@ import {
   CheckSquare,
 } from "lucide-react";
 import Link from "next/link";
+import { PageSkeleton, TableSkeleton } from "@/components/ui/loading-skeletons";
 
 interface EmployeeSession {
   id: string;
@@ -55,10 +58,7 @@ export default function EmployeeBookingsPage() {
   const [filterStatus, setFilterStatus] = useState<string | null>(null);
   const [markingOccupied, setMarkingOccupied] = useState<number | null>(null);
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
+  const supabase = dataClient();
 
   useEffect(() => {
     const fetchData = async () => {
@@ -135,7 +135,7 @@ export default function EmployeeBookingsPage() {
       case "rejected":
         return <XCircle className="h-5 w-5 text-red-600" />;
       default:
-        return <Clock className="h-5 w-5 text-gray-600" />;
+        return <Clock className="h-5 w-5 text-gray-600 dark:text-slate-400" />;
     }
   };
 
@@ -148,7 +148,7 @@ export default function EmployeeBookingsPage() {
       case "rejected":
         return "bg-red-100 text-red-800";
       default:
-        return "bg-gray-100 text-gray-800";
+        return "bg-gray-100 dark:bg-slate-800 text-gray-800 dark:text-slate-100";
     }
   };
 
@@ -199,21 +199,8 @@ export default function EmployeeBookingsPage() {
       if (occupiedError) {
         // Log error with safe property access
         console.error("Occupied apartments insert error:", occupiedError);
-        console.error("Error details:", {
-          message: occupiedError?.message,
-          code: occupiedError?.code,
-          details: occupiedError?.details,
-          hint: occupiedError?.hint,
-          status: occupiedError?.status,
-        });
-        console.error("Insert data being sent:", {
-          apartment_id: booking.apartment_id,
-          booking_id: booking.id,
-          tenant_id: booking.tenant_id,
-          marked_by_employee_id: employeeDbId,
-          occupied_date: new Date().toISOString().split("T")[0],
-        });
-        alert("Error marking apartment as occupied: " + (occupiedError?.message || JSON.stringify(occupiedError)));
+        const errorMessage = occupiedError?.message || "Unknown error";
+        alert("Error marking apartment as occupied: " + errorMessage);
         setMarkingOccupied(null);
         return;
       }
@@ -246,14 +233,9 @@ export default function EmployeeBookingsPage() {
   };
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading bookings...</p>
-        </div>
-      </div>
-    );
+    // Skeleton, not a spinner: it occupies the same space the real
+    // content will, so nothing shifts when the data arrives.
+    return <PageSkeleton label="Loading bookings"><TableSkeleton rows={8} cols={6} /></PageSkeleton>;
   }
 
   if (!employee) {
@@ -261,11 +243,12 @@ export default function EmployeeBookingsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="bg-white shadow">
+    <div className="min-h-screen bg-gray-50 dark:bg-slate-900">
+      <SessionGuard sessionKey="employee_session" redirectTo="/employee/login" />
+      <div className="bg-white dark:bg-slate-800 shadow">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
-            <h1 className="text-3xl font-bold text-gray-900">All Tenant Bookings</h1>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">All Tenant Bookings</h1>
             <Button asChild variant="outline">
               <Link href="/employee/dashboard">Back to Dashboard</Link>
             </Button>
@@ -324,30 +307,30 @@ export default function EmployeeBookingsPage() {
                     <div className="grid md:grid-cols-2 gap-6">
                       {/* Tenant Info */}
                       <div>
-                        <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
                           <User className="h-5 w-5 text-blue-600" />
                           Tenant Information
                         </h3>
                         <div className="space-y-3">
                           <div>
-                            <p className="text-sm text-gray-600">Tenant ID</p>
-                            <p className="font-medium text-gray-900">{booking.tenant_id}</p>
+                            <p className="text-sm text-gray-600 dark:text-slate-400">Tenant ID</p>
+                            <p className="font-medium text-gray-900 dark:text-white">{booking.tenant_id}</p>
                           </div>
                           <div>
-                            <p className="text-sm text-gray-600">Client Name</p>
-                            <p className="font-medium text-gray-900">
+                            <p className="text-sm text-gray-600 dark:text-slate-400">Client Name</p>
+                            <p className="font-medium text-gray-900 dark:text-white">
                               {booking.client_name || "N/A"}
                             </p>
                           </div>
                           <div>
-                            <p className="text-sm text-gray-600">Email</p>
-                            <p className="font-medium text-gray-900 break-all">
+                            <p className="text-sm text-gray-600 dark:text-slate-400">Email</p>
+                            <p className="font-medium text-gray-900 dark:text-white break-all">
                               {booking.email || "N/A"}
                             </p>
                           </div>
                           <div>
-                            <p className="text-sm text-gray-600">Phone</p>
-                            <p className="font-medium text-gray-900">
+                            <p className="text-sm text-gray-600 dark:text-slate-400">Phone</p>
+                            <p className="font-medium text-gray-900 dark:text-white">
                               {booking.phone_number || "N/A"}
                             </p>
                           </div>
@@ -356,17 +339,17 @@ export default function EmployeeBookingsPage() {
 
                       {/* Booking Info */}
                       <div>
-                        <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
                           <Home className="h-5 w-5 text-blue-600" />
                           Booking Details
                         </h3>
                         <div className="space-y-3">
                           <div>
-                            <p className="text-sm text-gray-600">Apartment</p>
-                            <p className="font-medium text-gray-900 flex items-center gap-2">
+                            <p className="text-sm text-gray-600 dark:text-slate-400">Apartment</p>
+                            <p className="font-medium text-gray-900 dark:text-white flex items-center gap-2">
                               {apartment ? (
                                 <>
-                                  <Home className="h-4 w-4 text-gray-400" />
+                                  <Home className="h-4 w-4 text-gray-400 dark:text-slate-500" />
                                   {apartment.name}
                                 </>
                               ) : (
@@ -376,31 +359,31 @@ export default function EmployeeBookingsPage() {
                           </div>
                           <div className="flex gap-6">
                             <div>
-                              <p className="text-sm text-gray-600">Check-in</p>
-                              <p className="font-medium text-gray-900 flex items-center gap-2">
-                                <Calendar className="h-4 w-4 text-gray-400" />
-                                {new Date(booking.start_date).toLocaleDateString()}
+                              <p className="text-sm text-gray-600 dark:text-slate-400">Check-in</p>
+                              <p className="font-medium text-gray-900 dark:text-white flex items-center gap-2">
+                                <Calendar className="h-4 w-4 text-gray-400 dark:text-slate-500" />
+                                {formatDate(booking.start_date)}
                               </p>
                             </div>
                             <div>
-                              <p className="text-sm text-gray-600">Check-out</p>
-                              <p className="font-medium text-gray-900 flex items-center gap-2">
-                                <Calendar className="h-4 w-4 text-gray-400" />
-                                {new Date(booking.end_date).toLocaleDateString()}
+                              <p className="text-sm text-gray-600 dark:text-slate-400">Check-out</p>
+                              <p className="font-medium text-gray-900 dark:text-white flex items-center gap-2">
+                                <Calendar className="h-4 w-4 text-gray-400 dark:text-slate-500" />
+                                {formatDate(booking.end_date)}
                               </p>
                             </div>
                           </div>
                           {apartment && (
                             <div>
-                              <p className="text-sm text-gray-600">Monthly Rent</p>
-                              <p className="font-medium text-gray-900 flex items-center gap-2">
-                                <DollarSign className="h-4 w-4 text-gray-400" />
+                              <p className="text-sm text-gray-600 dark:text-slate-400">Monthly Rent</p>
+                              <p className="font-medium text-gray-900 dark:text-white flex items-center gap-2">
+                                <DollarSign className="h-4 w-4 text-gray-400 dark:text-slate-500" />
                                 ${apartment.price_per_month}
                               </p>
                             </div>
                           )}
                           <div className="flex items-center gap-2 pt-2">
-                            <span className="text-sm text-gray-600">Status:</span>
+                            <span className="text-sm text-gray-600 dark:text-slate-400">Status:</span>
                             <span
                               className={`px-3 py-1 rounded-full text-sm font-medium flex items-center gap-2 ${getStatusColor(
                                 booking.status
@@ -420,7 +403,7 @@ export default function EmployeeBookingsPage() {
                               {markingOccupied === booking.id ? "Marking..." : "Mark as Occupied"}
                             </Button>
                             {booking.status?.toLowerCase() !== "confirmed" && (
-                              <p className="text-xs text-gray-500 mt-2 text-center">
+                              <p className="text-xs text-gray-500 dark:text-slate-400 mt-2 text-center">
                                 Only confirmed bookings can be marked as occupied
                               </p>
                             )}
@@ -436,8 +419,8 @@ export default function EmployeeBookingsPage() {
         ) : (
           <Card>
             <CardContent className="pt-12 text-center pb-12">
-              <AlertCircle className="h-12 w-12 text-gray-400 mx-auto mb-3" />
-              <p className="text-gray-600 text-lg">
+              <AlertCircle className="h-12 w-12 text-gray-400 dark:text-slate-500 mx-auto mb-3" />
+              <p className="text-gray-600 dark:text-slate-400 text-lg">
                 {filterStatus ? "No bookings with this status" : "No bookings found"}
               </p>
             </CardContent>

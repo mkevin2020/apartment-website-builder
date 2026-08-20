@@ -1,75 +1,50 @@
 import Link from "next/link"
-import { Building2, Mail, Phone, MapPin } from "lucide-react"
+import { Home, Facebook, Twitter, Instagram } from "lucide-react"
 
 export function SiteFooter() {
   return (
-    <footer className="bg-slate-900 text-slate-300">
-      <div className="container mx-auto px-4 py-12">
-        <div className="grid md:grid-cols-4 gap-8">
-          <div>
-            <div className="flex items-center gap-2 mb-4">
-              <Building2 className="h-6 w-6 text-amber-500" />
-              <span className="text-xl font-bold text-white">Cielo Vista</span>
-            </div>
-            <p className="text-sm">Premium apartment living in the heart of Kigali, Karama Sector.</p>
+    <footer className="bg-slate-950 dark:bg-black text-slate-400 py-16 border-t border-slate-900 dark:border-slate-800 px-4 transition-colors">
+      <div className="max-w-7xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-8 mb-12">
+        <div className="col-span-2 md:col-span-1">
+          <div className="flex items-center gap-2 mb-6">
+            <Home className="h-6 w-6 text-amber-500" />
+            <span className="text-xl font-bold text-white">Cielo Vista</span>
           </div>
-
-          <div>
-            <h3 className="text-white font-semibold mb-4">Quick Links</h3>
-            <ul className="space-y-2 text-sm">
-              <li>
-                <Link href="/" className="hover:text-amber-500 transition-colors">
-                  Home
-                </Link>
-              </li>
-              <li>
-                <Link href="/apartments" className="hover:text-amber-500 transition-colors">
-                  Apartments
-                </Link>
-              </li>
-              <li>
-                <Link href="/booking" className="hover:text-amber-500 transition-colors">
-                  Booking
-                </Link>
-              </li>
-              <li>
-                <Link href="/feedback" className="hover:text-amber-500 transition-colors">
-                  Contact
-                </Link>
-              </li>
-            </ul>
-          </div>
-
-          <div>
-            <h3 className="text-white font-semibold mb-4">Contact Info</h3>
-            <ul className="space-y-2 text-sm">
-              <li className="flex items-start gap-2">
-                <MapPin className="h-4 w-4 mt-1 flex-shrink-0" />
-                <span>Karama Sector, Kigali, Rwanda</span>
-              </li>
-              <li className="flex items-center gap-2">
-                <Phone className="h-4 w-4 flex-shrink-0" />
-                <span>+250 788 352 933</span>
-              </li>
-              <li className="flex items-center gap-2">
-                <Mail className="h-4 w-4 flex-shrink-0" />
-                <span>info@cielovista.rw</span>
-              </li>
-            </ul>
-          </div>
-
-          <div>
-            <h3 className="text-white font-semibold mb-4">Office Hours</h3>
-            <ul className="space-y-2 text-sm">
-              <li>Monday - Friday: 8AM - 6PM</li>
-              <li>Saturday: 9AM - 4PM</li>
-              <li>Sunday: Closed</li>
-            </ul>
-          </div>
+          <p className="text-sm text-slate-400 max-w-xs">
+            Cielo Vista — premium serviced apartments in Karama, Kigali. Book your stay with ease. No stress, just home.
+          </p>
         </div>
-
-        <div className="border-t border-slate-800 mt-8 pt-8 text-center text-sm">
-          <p>&copy; {new Date().getFullYear()} Cielo Vista Apartments. All rights reserved.</p>
+        <div>
+          <h4 className="text-white font-semibold mb-4">Explore</h4>
+          <ul className="space-y-3 text-sm">
+            <li><Link href="/apartments" className="hover:text-amber-400 transition-colors">Browse Apartments</Link></li>
+            <li><Link href="/booking" className="hover:text-amber-400 transition-colors">Book Now</Link></li>
+            <li><Link href="/tenant/register" className="hover:text-amber-400 transition-colors">Sign Up</Link></li>
+            <li><Link href="/login" className="hover:text-amber-400 transition-colors">Log In</Link></li>
+          </ul>
+        </div>
+        <div>
+          <h4 className="text-white font-semibold mb-4">Company</h4>
+          <ul className="space-y-3 text-sm">
+            <li><Link href="/about" className="hover:text-amber-400 transition-colors">About Us</Link></li>
+            <li><Link href="/contact" className="hover:text-amber-400 transition-colors">Contact</Link></li>
+            <li><Link href="/feedback" className="hover:text-amber-400 transition-colors">Feedback</Link></li>
+          </ul>
+        </div>
+        <div>
+          <h4 className="text-white font-semibold mb-4">Contact</h4>
+          <ul className="space-y-3 text-sm">
+            <li>Karama, Kigali, Rwanda</li>
+            <li><a href="mailto:testkevin73@gmail.com" className="hover:text-amber-400 transition-colors">testkevin73@gmail.com</a></li>
+          </ul>
+        </div>
+      </div>
+      <div className="max-w-7xl mx-auto pt-8 border-t border-slate-800 flex flex-col md:flex-row items-center justify-between gap-4 text-sm">
+        <p>© {new Date().getFullYear()} Cielo Vista Apartments. All rights reserved.</p>
+        <div className="flex gap-4">
+           <Link href="#" className="w-8 h-8 rounded-full bg-slate-800 hover:bg-amber-500 text-white transition-colors flex items-center justify-center"><Facebook className="w-4 h-4" /></Link>
+           <Link href="#" className="w-8 h-8 rounded-full bg-slate-800 hover:bg-amber-500 text-white transition-colors flex items-center justify-center"><Twitter className="w-4 h-4" /></Link>
+           <Link href="#" className="w-8 h-8 rounded-full bg-slate-800 hover:bg-amber-500 text-white transition-colors flex items-center justify-center"><Instagram className="w-4 h-4" /></Link>
         </div>
       </div>
     </footer>

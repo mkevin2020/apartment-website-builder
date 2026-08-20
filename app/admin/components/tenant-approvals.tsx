@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createBrowserClient } from "@supabase/ssr";
+import { dataClient } from "@/lib/data-client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { formatDate } from "@/lib/utils";
 import {
   CheckCircle,
   XCircle,
@@ -24,6 +25,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { ListSkeleton } from "@/components/ui/loading-skeletons";
 
 interface TenantRequest {
   id: number;
@@ -51,10 +53,7 @@ export default function TenantApprovalsPage() {
   const [rejectionReason, setRejectionReason] = useState("");
   const [showDialog, setShowDialog] = useState(false);
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
+  const supabase = dataClient();
 
   useEffect(() => {
     const checkAdminAuth = () => {
@@ -122,6 +121,21 @@ export default function TenantApprovalsPage() {
         return;
       }
 
+      // Notify the tenant by email (best-effort — never block approval on email)
+      try {
+        await fetch("/api/tenants/approval-email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: selectedTenant.email,
+            name: selectedTenant.full_name,
+            status: "approved",
+          }),
+        });
+      } catch (emailErr) {
+        console.error("Failed to send approval email:", emailErr);
+      }
+
       // Refresh the list
       setTenants(tenants.filter((t) => t.id !== selectedTenant.id));
       setShowDialog(false);
@@ -150,6 +164,22 @@ export default function TenantApprovalsPage() {
         return;
       }
 
+      // Notify the tenant by email (best-effort)
+      try {
+        await fetch("/api/tenants/approval-email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: selectedTenant.email,
+            name: selectedTenant.full_name,
+            status: "rejected",
+            reason: rejectionReason,
+          }),
+        });
+      } catch (emailErr) {
+        console.error("Failed to send rejection email:", emailErr);
+      }
+
       // Refresh the list
       setTenants(tenants.filter((t) => t.id !== selectedTenant.id));
       setShowDialog(false);
@@ -170,7 +200,7 @@ export default function TenantApprovalsPage() {
       case "rejected":
         return "bg-red-100 text-red-800 border-red-300";
       default:
-        return "bg-gray-100 text-gray-800 border-gray-300";
+        return "bg-gray-100 dark:bg-slate-800 text-gray-800 dark:text-slate-100 border-gray-300 dark:border-slate-700";
     }
   };
 
@@ -188,25 +218,20 @@ export default function TenantApprovalsPage() {
   };
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading tenant requests...</p>
-        </div>
-      </div>
-    );
+    // Skeleton, not a spinner: it occupies the same space the real
+    // content will, so nothing shifts when the data arrives.
+    return <ListSkeleton rows={4} withAvatar />;
   }
 
   const filteredTenants = filterStatus === "all" ? tenants : tenants.filter((t) => t.approval_status === filterStatus);
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-slate-900">
       <main className="container mx-auto px-4 py-8">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">Tenant Approvals</h1>
-          <p className="text-gray-600">
+          <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-2">Tenant Approvals</h1>
+          <p className="text-gray-600 dark:text-slate-400">
             Review and approve new tenant account requests
           </p>
         </div>
@@ -221,12 +246,12 @@ export default function TenantApprovalsPage() {
               className={
                 filterStatus === status
                   ? "bg-blue-600 hover:bg-blue-700"
-                  : "border-gray-300"
+                  : "border-gray-300 dark:border-slate-700"
               }
             >
               {status.charAt(0).toUpperCase() + status.slice(1)}
               {status !== "all" && (
-                <span className="ml-2 bg-white text-blue-600 px-2 py-1 rounded-full text-xs font-semibold">
+                <span className="ml-2 bg-white dark:bg-slate-800 text-blue-600 px-2 py-1 rounded-full text-xs font-semibold">
                   {tenants.filter((t) => t.approval_status === status).length}
                 </span>
               )}
@@ -238,7 +263,7 @@ export default function TenantApprovalsPage() {
         {filteredTenants.length === 0 ? (
           <Card>
             <CardContent className="pt-8 text-center">
-              <p className="text-gray-500 text-lg">
+              <p className="text-gray-500 dark:text-slate-400 text-lg">
                 No {filterStatus === "all" ? "" : filterStatus} tenant requests
               </p>
             </CardContent>
@@ -253,7 +278,7 @@ export default function TenantApprovalsPage() {
                     <div className="flex-1 space-y-4">
                       <div className="flex items-start justify-between">
                         <div>
-                          <h3 className="text-xl font-bold text-gray-900">
+                          <h3 className="text-xl font-bold text-gray-900 dark:text-white">
                             {tenant.full_name}
                           </h3>
                           <div className={`inline-flex items-center gap-2 mt-2 px-3 py-1 rounded-full text-sm font-semibold border ${getStatusColor(
@@ -264,57 +289,57 @@ export default function TenantApprovalsPage() {
                               tenant.approval_status.slice(1)}
                           </div>
                         </div>
-                        <p className="text-xs text-gray-500">
-                          {new Date(tenant.created_at).toLocaleDateString()}
+                        <p className="text-xs text-gray-500 dark:text-slate-400">
+                          {formatDate(tenant.created_at)}
                         </p>
                       </div>
 
                       <div className="grid md:grid-cols-2 gap-4 mt-4">
                         <div className="flex items-center gap-2">
-                          <Mail className="h-4 w-4 text-gray-400" />
+                          <Mail className="h-4 w-4 text-gray-400 dark:text-slate-500" />
                           <div>
-                            <p className="text-xs text-gray-500">Email</p>
-                            <p className="text-sm font-medium text-gray-900">
+                            <p className="text-xs text-gray-500 dark:text-slate-400">Email</p>
+                            <p className="text-sm font-medium text-gray-900 dark:text-white">
                               {tenant.email}
                             </p>
                           </div>
                         </div>
 
                         <div className="flex items-center gap-2">
-                          <Phone className="h-4 w-4 text-gray-400" />
+                          <Phone className="h-4 w-4 text-gray-400 dark:text-slate-500" />
                           <div>
-                            <p className="text-xs text-gray-500">Phone</p>
-                            <p className="text-sm font-medium text-gray-900">
+                            <p className="text-xs text-gray-500 dark:text-slate-400">Phone</p>
+                            <p className="text-sm font-medium text-gray-900 dark:text-white">
                               {tenant.phone}
                             </p>
                           </div>
                         </div>
 
                         <div className="flex items-center gap-2">
-                          <FileText className="h-4 w-4 text-gray-400" />
+                          <FileText className="h-4 w-4 text-gray-400 dark:text-slate-500" />
                           <div>
-                            <p className="text-xs text-gray-500">ID Number</p>
-                            <p className="text-sm font-medium text-gray-900">
+                            <p className="text-xs text-gray-500 dark:text-slate-400">ID Number</p>
+                            <p className="text-sm font-medium text-gray-900 dark:text-white">
                               {tenant.id_number}
                             </p>
                           </div>
                         </div>
 
                         <div className="flex items-center gap-2">
-                          <User className="h-4 w-4 text-gray-400" />
+                          <User className="h-4 w-4 text-gray-400 dark:text-slate-500" />
                           <div>
-                            <p className="text-xs text-gray-500">
+                            <p className="text-xs text-gray-500 dark:text-slate-400">
                               Emergency Contact
                             </p>
-                            <p className="text-sm font-medium text-gray-900">
+                            <p className="text-sm font-medium text-gray-900 dark:text-white">
                               {tenant.emergency_contact}
                             </p>
                           </div>
                         </div>
 
                         <div className="md:col-span-2">
-                          <p className="text-xs text-gray-500">Address</p>
-                          <p className="text-sm font-medium text-gray-900">
+                          <p className="text-xs text-gray-500 dark:text-slate-400">Address</p>
+                          <p className="text-sm font-medium text-gray-900 dark:text-white">
                             {tenant.address}, {tenant.city}, {tenant.country}
                           </p>
                         </div>
@@ -375,7 +400,7 @@ export default function TenantApprovalsPage() {
 
           {actionType === "reject" && (
             <div className="my-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
                 Rejection Reason (optional)
               </label>
               <Input

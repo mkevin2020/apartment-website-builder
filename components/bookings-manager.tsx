@@ -1,20 +1,26 @@
-"use client"
+﻿"use client"
 
 import { useState, useEffect } from "react"
-import { createBrowserClient } from "@supabase/ssr"
+import { dataClient } from "@/lib/data-client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
+
+function formatSupabaseError(error: any) {
+  if (!error) return "Unknown Supabase error"
+  if (typeof error === "string") return error
+  try {
+    return JSON.stringify(error, Object.getOwnPropertyNames(error), 2)
+  } catch {
+    return String(error)
+  }
+}
 
 export function BookingsManager() {
   const [bookings, setBookings] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [deleting, setDeleting] = useState<number | null>(null)
-
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-  )
+  const supabase = dataClient()
 
   useEffect(() => {
     fetchBookings()
@@ -22,22 +28,52 @@ export function BookingsManager() {
 
   const fetchBookings = async () => {
     try {
-      console.log("Fetching bookings...")
+      if (false) {
+        console.error("Supabase env vars are missing", {
+          hasUrl: true,
+          hasAnonKey: true,
+        })
+        setLoading(false)
+        return
+      }
 
+      // Deliberately NOT a PostgREST embed. `bookings.apartment_id` has no
+      // foreign key to `apartments` in this database, so
+      // `apartments!apartment_id(...)` fails with PGRST200 and the whole list
+      // comes back empty. We join the two ourselves instead, which works
+      // whether or not the constraint is ever added.
       const { data, error } = await supabase
         .from("bookings")
         .select("*")
         .order("created_at", { ascending: false })
 
-      console.log("Bookings data:", { data, error })
-
       if (error) {
-        console.error("Fetch error:", error)
+        console.error("Fetch error:", formatSupabaseError(error), error)
         setLoading(false)
         return
       }
 
-      setBookings(data || [])
+      const rows = data || []
+      const aptIds = Array.from(
+        new Set(rows.map((b: any) => b.apartment_id).filter((id: any) => id != null))
+      )
+
+      let aptById = new Map<string, any>()
+      if (aptIds.length > 0) {
+        const { data: apts } = await supabase
+          .from("apartments")
+          .select("id, name, type")
+          .in("id", aptIds)
+        aptById = new Map((apts || []).map((a: any) => [String(a.id), a]))
+      }
+
+      // Shape it exactly like the old embed did, so the table below is unchanged.
+      setBookings(
+        rows.map((b: any) => ({
+          ...b,
+          apartments: aptById.get(String(b.apartment_id)) || null,
+        }))
+      )
     } catch (err) {
       console.error("Exception:", err)
     } finally {
@@ -55,6 +91,24 @@ export function BookingsManager() {
       if (error) {
         alert("Error updating status: " + error.message)
         return
+      }
+
+      // When a booking is accepted (confirmed), text the person who booked.
+      if (newStatus === "confirmed") {
+        const b = bookings.find((x) => x.id === id)
+        if (b?.phone_number) {
+          fetch("/api/bookings/send-sms", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              phone_number: b.phone_number,
+              client_name: b.client_name,
+              message:
+                `Hello ${b.client_name || "there"}! Great news — your apartment booking at ` +
+                `Cielo Vista has been ACCEPTED and confirmed. We look forward to hosting you!`,
+            }),
+          }).catch(() => {})
+        }
       }
 
       alert("Status updated!")
@@ -122,7 +176,7 @@ export function BookingsManager() {
                     <TableCell>{booking.client_name}</TableCell>
                     <TableCell>{booking.email}</TableCell>
                     <TableCell>{booking.phone_number}</TableCell>
-                    <TableCell>{booking.apartment_type}</TableCell>
+                    <TableCell>{booking.apartments?.type || booking.apartments?.name || `#${booking.apartment_id}`}</TableCell>
                     <TableCell>{new Date(booking.start_date).toLocaleDateString()}</TableCell>
                     <TableCell>{new Date(booking.end_date).toLocaleDateString()}</TableCell>
                     <TableCell>

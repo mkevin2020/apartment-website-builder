@@ -1,0 +1,17 @@
+# Pinned exactly. The previous file listed bare package names, so every
+# `pip install -r` produced a different dependency set — an unreviewed upstream
+# release would have landed straight in production, and a compromised one with
+# it. Bump these deliberately after checking the changelog.
+#
+# Regenerate the full transitive lock with:
+#     pip install pip-tools && pip-compile requirements.txt -o requirements.lock
+# and install from the lock in CI/production:
+#     pip install --require-hashes -r requirements.lock
+
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+python-dotenv==1.0.1
+requests==2.32.3
+httpx==0.28.1
+pydantic==2.10.4
+pydantic-settings==2.7.0

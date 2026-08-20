@@ -1,32 +1,73 @@
-"use client"
+﻿"use client"
 
 import { useEffect, useState } from "react"
-import { createBrowserClient } from "@supabase/ssr"
+import { dataClient } from "@/lib/data-client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { CheckCircle, Clock, XCircle, Eye, Calendar } from "lucide-react"
 
+function formatSupabaseError(error: any) {
+  if (!error) return "Unknown Supabase error"
+  if (typeof error === "string") return error
+  try {
+    return JSON.stringify(error, Object.getOwnPropertyNames(error), 2)
+  } catch {
+    return String(error)
+  }
+}
+
 export default function BookingsManager() {
   const [bookings, setBookings] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedBooking, setSelectedBooking] = useState<any>(null)
-
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL || "",
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
-  )
+  const supabase = dataClient()
 
   useEffect(() => {
     const fetchBookings = async () => {
       try {
+        if (false) {
+          console.error("Supabase env vars are missing", {
+            hasUrl: true,
+            hasAnonKey: true,
+          })
+          return
+        }
+
+        // No PostgREST embed here: bookings.apartment_id has no foreign key to
+        // apartments, so `apartments!apartment_id(...)` fails with PGRST200.
+        // Fetch both and join in JS instead.
         const { data, error } = await supabase
           .from("bookings")
           .select("*")
           .order("created_at", { ascending: false })
 
-        if (error) throw error
-        setBookings(data || [])
+        if (error) {
+          console.error("Fetch error:", formatSupabaseError(error), error)
+          throw error
+        }
+
+        const rows = data || []
+        const aptIds = Array.from(
+          new Set(rows.map((b: any) => b.apartment_id).filter((id: any) => id != null))
+        )
+
+        let aptById = new Map<string, any>()
+        if (aptIds.length > 0) {
+          const { data: apts } = await supabase
+            .from("apartments")
+            .select("id, name, type")
+            .in("id", aptIds)
+          aptById = new Map((apts || []).map((a: any) => [String(a.id), a]))
+        }
+
+        // Same shape the embed produced, so the rest of the component is unchanged.
+        setBookings(
+          rows.map((b: any) => ({
+            ...b,
+            apartments: aptById.get(String(b.apartment_id)) || null,
+          }))
+        )
       } catch (err) {
         console.error("Error fetching bookings:", err)
       } finally {
@@ -109,7 +150,7 @@ export default function BookingsManager() {
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                     <div>
                       <p className="text-xs text-gray-500 uppercase">Apartment Type</p>
-                      <p className="font-medium">{booking.apartment_type}</p>
+                      <p className="font-medium">{booking.apartments?.type || booking.apartments?.name || `#${booking.apartment_id}`}</p>
                     </div>
                     <div>
                       <p className="text-xs text-gray-500 uppercase">Check-in</p>
@@ -174,7 +215,7 @@ export default function BookingsManager() {
               </div>
               <div>
                 <p className="text-sm text-gray-600">Apartment Type</p>
-                <p className="font-semibold">{selectedBooking.apartment_type}</p>
+                <p className="font-semibold">{selectedBooking.apartments?.type || selectedBooking.apartments?.name || `#${selectedBooking.apartment_id}`}</p>
               </div>
               <div>
                 <p className="text-sm text-gray-600">Check-in Date</p>

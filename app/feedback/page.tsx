@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { createBrowserClient } from "@supabase/ssr"
+import { dataClient } from "@/lib/data-client";
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -20,10 +20,7 @@ export default function ContactPage() {
     message: "",
   })
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-  )
+  const supabase = dataClient()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -35,7 +32,14 @@ export default function ContactPage() {
         rating: rating,
       }
 
-      const { error } = await supabase.from("client_feedback").insert([feedbackData])
+      let { error } = await supabase.from("client_feedback").insert([feedbackData])
+
+      // If the rating column hasn't been added yet, retry without it so feedback still saves
+      if (error && /rating/i.test(error.message)) {
+        const { rating: _omit, ...withoutRating } = feedbackData
+        void _omit
+        ;({ error } = await supabase.from("client_feedback").insert([withoutRating]))
+      }
 
       if (error) {
         alert("Error sending feedback: " + error.message)

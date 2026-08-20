@@ -1,52 +1,51 @@
 import { NextRequest, NextResponse } from 'next/server'
-import twilio from 'twilio'
+import { sendIntouchSMS } from '@/lib/intouch-sms'
+import { requireSession, errorResponse } from '@/lib/auth/session'
+import { enforceRateLimit } from '@/lib/auth/rate-limit'
+import { parseJson, phoneSchema, z } from '@/lib/auth/validate'
 
+// Sends a booking confirmation SMS via IntouchSMS (Rwanda).
 export async function POST(request: NextRequest) {
   try {
-    const { phone_number, client_name } = await request.json()
+    // Every SMS costs real credit, so this must not be an open relay: sign-in
+    // required (all callers are tenant/staff pages), plus a per-IP cap.
+    await requireSession(request)
+    await enforceRateLimit(request, 'sms-send', 10, 60 * 60)
 
-    // Validate inputs
-    if (!phone_number || !client_name) {
+    const { phone_number, client_name, message: customMessage } = await parseJson(
+      request,
+      z.object({
+        phone_number: phoneSchema,
+        client_name: z.string().trim().max(120).optional(),
+        message: z.string().trim().max(320).optional(),
+      }),
+    )
+
+    // Use a custom message if provided (e.g. booking accepted), else the default "submitted".
+    const message =
+      customMessage ||
+      `Hello ${client_name || 'there'}! Your apartment booking has been submitted successfully. ` +
+        `Our team will contact you shortly to confirm the details.`
+
+    const result = await sendIntouchSMS(phone_number, message)
+
+    if (result.disabled) {
+      // IntouchSMS credentials not set yet — don't fail the booking flow.
       return NextResponse.json(
-        { error: 'Phone number and client name are required' },
-        { status: 400 }
-      )
-    }
-
-    // Initialize Twilio client
-    const accountSid = process.env.TWILIO_ACCOUNT_SID
-    const authToken = process.env.TWILIO_AUTH_TOKEN
-    const twilioPhoneNumber = process.env.TWILIO_PHONE_NUMBER
-
-    if (!accountSid || !authToken || !twilioPhoneNumber) {
-      console.warn('SMS service not configured - SMS disabled')
-      return NextResponse.json(
-        { success: true, messageId: 'DISABLED', message: 'SMS service disabled' },
+        { success: true, messageId: 'DISABLED', message: 'SMS service not configured yet' },
         { status: 200 }
       )
     }
 
-    const client = twilio(accountSid, authToken)
+    if (!result.success) {
+      return NextResponse.json(
+        { error: 'Failed to send SMS confirmation', details: result.error },
+        { status: 500 }
+      )
+    }
 
-    // Send SMS
-    const message = await client.messages.create({
-      body: `Hello ${client_name}! Your apartment booking has been submitted successfully. Our team will contact you shortly to confirm the details.`,
-      from: twilioPhoneNumber,
-      to: phone_number,
-    })
-
-    return NextResponse.json(
-      { success: true, messageId: message.sid },
-      { status: 200 }
-    )
+    return NextResponse.json({ success: true, data: result.data }, { status: 200 })
   } catch (error) {
-    console.error('SMS sending error:', error)
-    const errorMessage = error instanceof Error ? error.message : String(error)
-    const errorStack = error instanceof Error ? error.stack : ''
-    console.error('Error stack:', errorStack)
-    return NextResponse.json(
-      { error: 'Failed to send SMS confirmation', details: errorMessage, stack: errorStack },
-      { status: 500 }
-    )
+    return errorResponse(error)
   }
 }

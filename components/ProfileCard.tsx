@@ -3,7 +3,6 @@
 import { useState, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { createBrowserClient } from "@supabase/ssr";
 import { Mail, Phone, MapPin, Camera } from "lucide-react";
 
 interface ProfileCardProps {
@@ -13,12 +12,10 @@ interface ProfileCardProps {
 export default function ProfileCard({ tenant }: ProfileCardProps) {
   const [profileImage, setProfileImage] = useState(tenant.profile_image_url);
   const [uploading, setUploading] = useState(false);
+  // Upload failures were only logged to the console, so a tenant whose
+  // photo failed saw nothing happen at all.
+  const [uploadError, setUploadError] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -27,35 +24,32 @@ export default function ProfileCard({ tenant }: ProfileCardProps) {
     setUploading(true);
 
     try {
-      const fileExt = file.name.split(".").pop();
-      const fileName = `${tenant.id}-${Date.now()}.${fileExt}`;
+      // Uploaded through the API, which derives the filename from the signed
+      // session. Doing it here meant the object name came from `tenant.id` — a
+      // value read out of localStorage, so a tenant could write into another
+      // tenant's namespace — and the resulting URL was publicly readable.
+      const body = new FormData();
+      body.append("file", file);
 
-      // Upload to Supabase Storage
-      const { error: uploadError } = await supabase.storage
-        .from("tenant-profiles")
-        .upload(fileName, file, { upsert: true });
+      const res = await fetch("/api/tenant/profile-photo", {
+        method: "POST",
+        body,
+      });
 
-      if (uploadError) throw uploadError;
+      const data = await res.json().catch(() => null);
 
-      // Get public URL
-      const {
-        data: { publicUrl },
-      } = supabase.storage.from("tenant-profiles").getPublicUrl(fileName);
+      if (!res.ok) {
+        setUploadError(data?.error || "Could not upload your photo. Please try again.");
+        return;
+      }
 
-      // Update tenant record
-      const { error: updateError } = await supabase
-        .from("tenants")
-        .update({ profile_image_url: publicUrl })
-        .eq("id", tenant.id);
-
-      if (updateError) throw updateError;
-
-      setProfileImage(publicUrl);
+      // A signed URL for immediate display; the database stores the path.
+      setProfileImage(data.url);
       const session = JSON.parse(localStorage.getItem("tenant_session") || "{}");
-      session.profile_image_url = publicUrl;
+      session.profile_picture_url = data.path;
       localStorage.setItem("tenant_session", JSON.stringify(session));
-    } catch (error) {
-      console.error("Error uploading image:", error);
+    } catch {
+      setUploadError("Could not upload your photo. Please check your connection.");
     } finally {
       setUploading(false);
     }
@@ -96,6 +90,14 @@ export default function ProfileCard({ tenant }: ProfileCardProps) {
             disabled={uploading}
           />
         </div>
+
+        {/* Upload failures were previously only console.error'd, so a tenant
+            whose photo failed saw nothing at all happen. */}
+        {uploadError && (
+          <p role="alert" className="text-center text-sm text-red-600">
+            {uploadError}
+          </p>
+        )}
 
         {/* Profile Information */}
         <div className="space-y-3">

@@ -1,8 +1,7 @@
-"use client";
+﻿"use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { createBrowserClient } from "@supabase/ssr";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,10 +19,11 @@ export default function EmployeeForgotPasswordPage() {
     reason: "",
   });
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
+  // Prefill the email when arriving from the unified /forgot-password page
+  useEffect(() => {
+    const prefill = new URLSearchParams(window.location.search).get("email");
+    if (prefill) setFormData((f) => ({ ...f, email: prefill }));
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,32 +37,28 @@ export default function EmployeeForgotPasswordPage() {
         return;
       }
 
-      // Check if employee exists
-      const { data: employee, error: queryError } = await supabase
-        .from("employees")
-        .select("*")
-        .eq("email", formData.email)
-        .single();
+      // Both the account lookup and the queue entry happen server-side.
+      // The browser can no longer read employees (correctly — those rows are
+      // staff PII), and it never got to choose `user_id` either: the server
+      // resolves the email to an account and files the request against that.
+      const res = await fetch("/api/auth/request-password-reset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: formData.email,
+          accountType: "employee",
+          fullName: formData.fullName,
+          reason: formData.reason,
+        }),
+      });
 
-      if (queryError || !employee) {
-        setError("No account found with this email");
+      if (res.status === 429) {
+        setError("Too many requests. Please wait a while and try again.");
         setLoading(false);
         return;
       }
 
-      // Create password reset request
-      const { error: insertError } = await supabase
-        .from("password_reset_requests")
-        .insert({
-          user_id: employee.id,
-          user_type: "employee",
-          email: formData.email,
-          user_name: formData.fullName,
-          reason: formData.reason || "User requested password reset",
-          status: "pending",
-        });
-
-      if (insertError) {
+      if (!res.ok) {
         setError("Failed to submit request. Please try again.");
         setLoading(false);
         return;

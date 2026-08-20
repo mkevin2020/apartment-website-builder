@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
+import { requireRole, STAFF } from "@/lib/auth/session";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -8,10 +9,15 @@ const supabase = createClient(
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { sessionId: string } }
+  { params }: { params: Promise<{ sessionId: string }> }
 ) {
   try {
-    const sessionId = params.sessionId;
+    // Reads a visitor's full chat transcript — staff only (the admin chat
+    // dialogs are the only callers).
+    await requireRole(request, STAFF);
+
+    // Next.js 16: params is a Promise and must be awaited
+    const { sessionId } = await params;
 
     if (!sessionId) {
       return NextResponse.json(

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { createBrowserClient } from "@supabase/ssr";
+import { dataClient } from "@/lib/data-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -43,10 +43,7 @@ export default function MaintenanceRequestForm({ tenant, onSuccess }: Maintenanc
     priority: "normal",
   });
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
+  const supabase = dataClient();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

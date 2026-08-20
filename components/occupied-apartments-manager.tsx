@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { createBrowserClient } from "@supabase/ssr"
+import { dataClient } from "@/lib/data-client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
@@ -19,6 +19,8 @@ interface OccupiedApartment {
   apartment_name?: string
   apartment_type?: string
   apartment_price?: number
+  booked_by_name?: string
+  booked_by_email?: string
 }
 
 export function OccupiedApartmentsManager() {
@@ -27,10 +29,7 @@ export function OccupiedApartmentsManager() {
   const [deleting, setDeleting] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-  )
+  const supabase = dataClient()
 
   useEffect(() => {
     fetchOccupiedApartments()
@@ -45,51 +44,56 @@ export function OccupiedApartmentsManager() {
     try {
       setLoading(true)
       setError(null)
-      
-      const { data, error } = await supabase
-        .from("occupied_apartments")
-        .select(`
-          id,
-          apartment_id,
-          booking_id,
-          tenant_id,
-          marked_by_employee_id,
-          occupied_date,
-          notes,
-          created_at,
-          apartments(id, name, type, price_per_month)
-        `)
-        .order("occupied_date", { ascending: false })
 
-      if (error) {
-        console.error("Fetch error:", error)
-        setError(`Error fetching occupied apartments: ${error.message}`)
+      // Occupied = apartments that are no longer available (the real source of truth)
+      const { data: apts, error: aptErr } = await supabase
+        .from("apartments")
+        .select("id, name, type, price_per_month")
+        .eq("is_available", false)
+
+      if (aptErr) {
+        setError(`Error fetching occupied apartments: ${aptErr.message}`)
         setLoading(false)
         return
       }
 
-      console.log("Occupied apartments data:", data)
-
-      if (!data || data.length === 0) {
-        console.log("No occupied apartments found")
+      if (!apts || apts.length === 0) {
         setOccupiedApartments([])
         setLoading(false)
         return
       }
 
-      const formattedData = (data || []).map((item: any) => ({
-        id: item.id,
-        apartment_id: item.apartment_id,
-        booking_id: item.booking_id,
-        tenant_id: item.tenant_id,
-        marked_by_employee_id: item.marked_by_employee_id,
-        occupied_date: item.occupied_date,
-        notes: item.notes,
-        created_at: item.created_at,
-        apartment_name: item.apartments?.name || "Unknown",
-        apartment_type: item.apartments?.type || "N/A",
-        apartment_price: item.apartments?.price_per_month || 0,
-      }))
+      // Find who booked each occupied apartment (most recent booking)
+      const aptIds = apts.map((a: any) => a.id)
+      const { data: bks } = await supabase
+        .from("bookings")
+        .select("apartment_id, client_name, email, start_date, created_at")
+        .in("apartment_id", aptIds)
+        .order("created_at", { ascending: false })
+
+      const latestByApt: Record<number, any> = {}
+      ;(bks || []).forEach((b: any) => {
+        if (!latestByApt[b.apartment_id]) latestByApt[b.apartment_id] = b
+      })
+
+      const formattedData = apts.map((a: any) => {
+        const b = latestByApt[a.id]
+        return {
+          id: a.id,
+          apartment_id: a.id,
+          booking_id: 0,
+          tenant_id: "",
+          marked_by_employee_id: 0,
+          occupied_date: b?.start_date || "",
+          notes: "",
+          created_at: "",
+          apartment_name: a.name || "Unknown",
+          apartment_type: a.type || "N/A",
+          apartment_price: a.price_per_month || 0,
+          booked_by_name: b?.client_name || "—",
+          booked_by_email: b?.email || "",
+        }
+      })
 
       setOccupiedApartments(formattedData)
     } catch (err) {
@@ -107,19 +111,7 @@ export function OccupiedApartmentsManager() {
 
     setDeleting(id)
     try {
-      // Delete from occupied_apartments
-      const { error: deleteError } = await supabase
-        .from("occupied_apartments")
-        .delete()
-        .eq("id", id)
-
-      if (deleteError) {
-        alert("Error removing occupied status: " + deleteError.message)
-        setDeleting(null)
-        return
-      }
-
-      // Set apartment back to available
+      // Free the apartment (the source of truth for occupancy)
       const { error: updateError } = await supabase
         .from("apartments")
         .update({ is_available: true })
@@ -131,16 +123,22 @@ export function OccupiedApartmentsManager() {
         return
       }
 
-      alert("Occupied status removed and apartment is now available again!")
+      // Clean up any legacy occupied_apartments rows for this apartment
+      await supabase.from("occupied_apartments").delete().eq("apartment_id", apartmentId)
+
+      alert("Apartment is now available again!")
       await fetchOccupiedApartments()
     } catch (err) {
       console.error("Error:", err)
-      alert("An error occurred while removing the occupied status")
+      alert("An error occurred while updating the apartment")
       setDeleting(null)
     }
   }
 
-  if (loading) {
+  // Only take over the card on the FIRST load. This refetches every 5s, and
+  // showing the spinner on every poll made the whole list disappear and rebuild
+  // itself twelve times a minute.
+  if (loading && occupiedApartments.length === 0) {
     return (
       <Card>
         <CardContent className="pt-12 text-center pb-12">
@@ -193,10 +191,10 @@ export function OccupiedApartmentsManager() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead>Booked By</TableHead>
                     <TableHead>Apartment Name</TableHead>
                     <TableHead>Type</TableHead>
-                  <TableHead>Price/Month</TableHead>
-                  <TableHead>Tenant ID</TableHead>
+                  <TableHead>Amount</TableHead>
                   <TableHead>Occupied Date</TableHead>
                   <TableHead>Notes</TableHead>
                   <TableHead>Actions</TableHead>
@@ -205,11 +203,16 @@ export function OccupiedApartmentsManager() {
               <TableBody>
                 {occupiedApartments.map((apt) => (
                   <TableRow key={apt.id}>
-                    <TableCell className="font-medium">{apt.apartment_name}</TableCell>
+                    <TableCell className="font-medium">
+                      {apt.booked_by_name}
+                      {apt.booked_by_email && (
+                        <span className="block text-xs text-gray-500">{apt.booked_by_email}</span>
+                      )}
+                    </TableCell>
+                    <TableCell>{apt.apartment_name}</TableCell>
                     <TableCell>{apt.apartment_type}</TableCell>
-                    <TableCell>${apt.apartment_price}</TableCell>
-                    <TableCell className="text-sm text-gray-600">{apt.tenant_id.slice(0, 8)}...</TableCell>
-                    <TableCell>{new Date(apt.occupied_date).toLocaleDateString()}</TableCell>
+                    <TableCell className="font-semibold">RWF {Number(apt.apartment_price).toLocaleString()}</TableCell>
+                    <TableCell>{apt.occupied_date ? new Date(apt.occupied_date).toLocaleDateString() : "—"}</TableCell>
                     <TableCell className="text-sm text-gray-600">{apt.notes || "-"}</TableCell>
                     <TableCell>
                       <Button
