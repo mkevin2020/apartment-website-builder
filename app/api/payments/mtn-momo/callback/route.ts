@@ -1,51 +1,40 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { completeTenantPayment } from "@/lib/complete-payment";
-import { claimEvent, completeEvent } from "@/lib/provider-events";
+import { claimEvent, completeEvent, releaseEvent } from "@/lib/provider-events";
 import { recordAudit } from "@/lib/audit";
+import { enforceRateLimit } from "@/lib/auth/rate-limit";
+import { fetchMomoStatus, momoConfigured } from "@/lib/mtn-momo";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MTN Mobile Money payment callback.
+// MTN Mobile Money callback.
 //
-// WHY THIS FILE EXISTS
+// WHY THIS ROUTE EXISTS
 //
 // app/api/payments/mtn-momo/route.ts registers this URL with MTN when it
-// initiates a payment:
+// initiates a payment. The route did not exist, so every callback hit a 404 and
+// nothing server-side ever learned that a payment had settled — confirmation
+// depended entirely on the customer's browser still being open and polling.
 //
-//     callbackURL: `${NEXT_PUBLIC_BASE_URL}/api/payments/mtn-momo/callback`
+// HOW IT TRUSTS THE CALLER — IT DOESN'T
 //
-// …but the route did not exist. Every callback MTN sent hit a 404, so nothing
-// server-side ever learned that a payment had settled. Confirmation depended
-// entirely on the browser polling /api/payments/mtn-momo/status — which means a
-// customer who paid and then closed the tab was never marked paid, and the
-// authoritative record of a real-money event was a client-side loop.
+// MADAPI's callback signing scheme is not documented to us. Rather than invent
+// one (a fabricated check looks like protection while accepting anything), this
+// route treats the callback as an unverified DOORBELL:
 //
-// ⚠️ SIGNATURE VERIFICATION IS A STUB — READ BEFORE GOING LIVE
+//     "something may have happened for transaction X"
 //
-// I do not know how MTN MADAPI signs its callbacks, and I will not guess: a
-// fabricated verification scheme is worse than none, because it looks like
-// protection while accepting anything. `verifyMtnCallback()` below is a
-// deliberate placeholder with the real checks written out as TODOs.
+// It then asks MTN directly, over a request authenticated with OUR OAuth
+// credentials, and completes the payment only if MTN itself confirms it.
 //
-// Until you fill it in, this route runs in one of two modes:
+// A forged callback therefore achieves nothing. The worst an attacker can do by
+// POSTing here is make the server ask MTN about a transaction id, and MTN
+// answers "not paid" — or "no such transaction". The body is never treated as
+// evidence of anything except which id to ask about.
 //
-//   MTN_CALLBACK_VERIFICATION=strict   (default, and what production MUST use)
-//       Unverified callbacks are REJECTED with 401 and logged. Payments are not
-//       completed from callbacks at all. This is safe but means MoMo payments
-//       still rely on the status poll until you implement verification.
-//
-//   MTN_CALLBACK_VERIFICATION=insecure-accept-all
-//       Every callback is trusted. This lets you observe real payloads in a
-//       sandbox so you can implement the checks. NEVER set this in production:
-//       anyone who finds the URL can mark any payment paid.
-//
-// What to ask MTN for:
-//   1. Do they sign callbacks? Which header carries the signature, which
-//      algorithm, and which secret/public key?
-//   2. Is the signature over the RAW request body? (It almost always is, which
-//      is why this route reads text() before parsing.)
-//   3. Do they publish a source IP range to allowlist?
-//   4. Is there a callback-specific shared secret separate from the API key?
+// This also means the route is correct BEFORE MTN documents their signatures.
+// If you later obtain the scheme, verifying the signature up front is a
+// worthwhile extra layer, but it is no longer load-bearing.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const supabase = createClient(
@@ -53,111 +42,69 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
 );
 
-type VerificationResult =
-  | { ok: true; reason: "verified" | "insecure-mode" }
-  | { ok: false; reason: string };
-
-/**
- * Verify that a callback genuinely came from MTN.
- *
- * IMPLEMENT THIS. The raw body is passed in unparsed precisely because
- * signatures are computed over the exact bytes received — parsing and
- * re-serialising JSON changes key order and whitespace and breaks the digest.
- */
-async function verifyMtnCallback(
-  request: NextRequest,
-  rawBody: string,
-): Promise<VerificationResult> {
-  const mode = process.env.MTN_CALLBACK_VERIFICATION || "strict";
-
-  if (mode === "insecure-accept-all") {
-    console.warn(
-      "[mtn-callback] MTN_CALLBACK_VERIFICATION=insecure-accept-all — every " +
-        "callback is being trusted. This must never be set in production.",
-    );
-    return { ok: true, reason: "insecure-mode" };
-  }
-
-  // ── TODO 1: signature header ──────────────────────────────────────────────
-  // const signature = request.headers.get("x-mtn-signature");   // ← real name?
-  // if (!signature) return { ok: false, reason: "missing signature header" };
-  //
-  // ── TODO 2: recompute over the RAW body ───────────────────────────────────
-  // const expected = crypto
-  //   .createHmac("sha256", process.env.MTN_CALLBACK_SECRET!)
-  //   .update(rawBody, "utf8")
-  //   .digest("hex");
-  // if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) {
-  //   return { ok: false, reason: "signature mismatch" };
-  // }
-  //
-  // ── TODO 3 (optional): source IP allowlist ────────────────────────────────
-  // const ip = clientIp(request);
-  // if (!MTN_CALLBACK_IPS.includes(ip)) return { ok: false, reason: "unknown source ip" };
-
-  void request;
-  void rawBody;
-
-  return {
-    ok: false,
-    reason:
-      "callback verification is not implemented — see verifyMtnCallback() in this file",
-  };
-}
-
-export async function POST(request: NextRequest) {
-  // Read the raw body FIRST: any signature scheme will be computed over these
-  // exact bytes, so it must not be parsed and re-serialised before checking.
-  const rawBody = await request.text();
-
-  const verification = await verifyMtnCallback(request, rawBody);
-
-  if (!verification.ok) {
-    // Rejected, not "trusted and logged". An unverifiable payment notification
-    // is not evidence that money moved.
-    console.error("[mtn-callback] rejected:", verification.reason);
-    await recordAudit(
-      {
-        action: "payment.completed",
-        outcome: "denied",
-        metadata: { provider: "mtn_momo", reason: verification.reason },
-      },
-      { req: request },
-    );
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  let payload: Record<string, unknown>;
-  try {
-    payload = JSON.parse(rawBody);
-  } catch {
-    return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
-  }
-
-  // MADAPI payload shapes vary by product; accept the common spellings rather
-  // than guessing one. Adjust once you have a real payload to look at.
-  const transactionId = String(
+/** Pull a transaction reference out of whatever shape MADAPI sends. */
+function transactionIdFrom(payload: Record<string, unknown>): string {
+  return String(
     payload.transactionId ??
       payload.transaction_id ??
       payload.referenceId ??
+      payload.reference_id ??
       payload.externalId ??
+      payload.external_id ??
       "",
-  );
-  const status = String(payload.status ?? "").toLowerCase();
+  ).trim();
+}
 
-  if (!transactionId) {
-    return NextResponse.json({ error: "No transaction reference" }, { status: 400 });
-  }
-
-  // De-duplicate: providers retry, and deliveries can overlap.
-  const claimed = await claimEvent("mtn_momo", transactionId, {
-    eventType: status || "callback",
-  });
-  if (!claimed) {
-    return NextResponse.json({ received: true, duplicate: true });
-  }
-
+export async function POST(request: NextRequest) {
   try {
+    // Publicly reachable by necessity, so it gets a ceiling. Generous, because
+    // MTN legitimately retries.
+    await enforceRateLimit(request, "momo-callback", 300, 10 * 60);
+
+    // Read the body as text first: if a signature scheme is ever added, it will
+    // be computed over these exact bytes, and parsing then re-serialising JSON
+    // changes key order and whitespace.
+    const rawBody = await request.text();
+
+    let payload: Record<string, unknown>;
+    try {
+      payload = JSON.parse(rawBody);
+    } catch {
+      return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
+    }
+
+    const transactionId = transactionIdFrom(payload);
+    if (!transactionId || transactionId.length > 128) {
+      return NextResponse.json({ error: "No usable transaction reference" }, { status: 400 });
+    }
+
+    // Without credentials we cannot verify anything, and an unverified callback
+    // is not evidence that money moved. Acknowledge so MTN stops retrying, but
+    // change nothing.
+    if (!momoConfigured()) {
+      console.error("[momo-callback] MTN credentials are not configured — cannot verify");
+      await recordAudit(
+        {
+          action: "payment.completed",
+          outcome: "denied",
+          metadata: { provider: "mtn_momo", reason: "credentials not configured" },
+        },
+        { req: request },
+      );
+      return NextResponse.json({ received: true, verified: false });
+    }
+
+    // De-duplicate before doing work: providers retry, and deliveries overlap.
+    const claimed = await claimEvent("mtn_momo", transactionId, {
+      eventType: String(payload.status ?? "callback"),
+    });
+    if (!claimed) {
+      return NextResponse.json({ received: true, duplicate: true });
+    }
+
+    // ── The actual authority: MTN's own API, not this request body ──────────
+    const status = await fetchMomoStatus(transactionId);
+
     const { data: row } = await supabase
       .from("tenant_payments")
       .select("id")
@@ -169,55 +116,47 @@ export async function POST(request: NextRequest) {
         status: "ignored",
         error: "no matching payment",
       });
-      // 200 so MTN stops retrying a callback we will never be able to match.
+      // 200 so MTN stops retrying something we can never match.
       return NextResponse.json({ received: true, matched: false });
     }
 
-    const SUCCESS = ["successful", "succeeded", "completed", "success"];
-    const FAILURE = ["failed", "rejected", "cancelled", "expired"];
+    const target = `tenant_payments:${row.id}`;
 
-    if (SUCCESS.includes(status)) {
+    if (status === "completed") {
       await completeTenantPayment(row.id, transactionId, "mtn_momo");
-      await completeEvent("mtn_momo", transactionId, {
-        status: "processed",
-        target: `tenant_payments:${row.id}`,
-      });
+      await completeEvent("mtn_momo", transactionId, { status: "processed", target });
       await recordAudit(
         {
           action: "payment.completed",
-          target: `tenant_payments:${row.id}`,
-          metadata: { provider: "mtn_momo", transaction_id: transactionId },
+          target,
+          metadata: { provider: "mtn_momo", transaction_id: transactionId, verified_with: "mtn api" },
         },
         { req: request },
       );
       return NextResponse.json({ received: true, status: "completed" });
     }
 
-    if (FAILURE.includes(status)) {
+    if (status === "failed") {
       await supabase
         .from("tenant_payments")
         .update({ status: "pending", updated_at: new Date().toISOString() })
         .eq("id", row.id)
         .eq("status", "processing");
-      await completeEvent("mtn_momo", transactionId, {
-        status: "processed",
-        target: `tenant_payments:${row.id}`,
-      });
+      await completeEvent("mtn_momo", transactionId, { status: "processed", target });
       return NextResponse.json({ received: true, status: "failed" });
     }
 
-    // Intermediate state — acknowledge without changing anything.
-    await completeEvent("mtn_momo", transactionId, {
-      status: "ignored",
-      target: `tenant_payments:${row.id}`,
-    });
-    return NextResponse.json({ received: true, status: status || "pending" });
+    // "processing" or "unknown" — MTN has not confirmed, so nothing changes.
+    //
+    // The claim MUST be released. Leaving it would make MTN's next retry — the
+    // one that would tell us the payment settled — look like a duplicate and be
+    // discarded, and the payment would never complete.
+    await releaseEvent("mtn_momo", transactionId);
+    return NextResponse.json({ received: true, status });
   } catch (err) {
-    console.error("[mtn-callback] processing failed:", err);
-    await completeEvent("mtn_momo", transactionId, {
-      status: "failed",
-      error: err instanceof Error ? err.message : String(err),
-    });
+    console.error("[momo-callback] processing failed:", err);
+    // 200 on purpose: a non-2xx makes MTN retry, and the de-duplication claim
+    // would then suppress the retry. The failure is recorded for reconciliation.
     return NextResponse.json({ received: true, error: "processing failed" });
   }
 }

@@ -4,15 +4,13 @@ import { completeTenantPayment } from "@/lib/complete-payment";
 import { loadOwnedPayment } from "@/lib/auth/payment-access";
 import { errorResponse, HttpError } from "@/lib/auth/session";
 import { enforceRateLimit } from "@/lib/auth/rate-limit";
+import { fetchMomoStatus } from "@/lib/mtn-momo";
 
 // Polled by the checkout dialog after a MoMo payment is initiated.
 // Demo transactions (DEMO-<epoch>-<paymentId>) auto-complete ~8 seconds after
 // initiation, mimicking the customer confirming the PIN prompt on their phone.
 // Real transactions query MTN's transaction-status endpoint.
 
-const BASE_URL = process.env.MTN_MOMO_BASE_URL || "https://api.mtn.com";
-const CONSUMER_KEY = process.env.MTN_MOMO_CONSUMER_KEY;
-const CONSUMER_SECRET = process.env.MTN_MOMO_CONSUMER_SECRET;
 const DEMO_CONFIRM_AFTER_MS = 8000;
 
 const supabase = createClient(
@@ -76,37 +74,15 @@ export async function GET(req: NextRequest) {
     }
 
     // ---- Real MTN transactions --------------------------------------------
-    // Authoritative completion now happens in the callback route, which MTN
-    // calls directly. This poll is the UI's progress indicator; it still
-    // completes as a fallback for the case where the callback never arrives,
-    // but only for a payment the caller owns.
-    {
-    const tokenRes = await fetch(
-      `${BASE_URL}/v1/oauth/access_token?grant_type=client_credentials`,
-      {
-        method: "POST",
-        headers: {
-          Authorization:
-            "Basic " + Buffer.from(`${CONSUMER_KEY}:${CONSUMER_SECRET}`).toString("base64"),
-          "Content-Type": "application/x-www-form-urlencoded",
-          "Content-Length": "0",
-        },
-      }
-    );
-    const { access_token } = await tokenRes.json();
+    //
+    // Authoritative completion happens in the callback route, which MTN calls
+    // directly. This poll is the UI's progress indicator, and a fallback for
+    // when the callback never arrives — but it resolves the status through the
+    // SAME helper, so there is exactly one definition of "MTN says this is
+    // paid" rather than two implementations that can drift apart.
+    const status = await fetchMomoStatus(tid);
 
-    const res = await fetch(`${BASE_URL}/v1/payments/${tid}/transactionStatus`, {
-      headers: { Authorization: `Bearer ${access_token}` },
-    });
-    if (!res.ok) {
-      return NextResponse.json({ status: "processing" });
-    }
-    const data = await res.json();
-    const mtnStatus = String(
-      data?.data?.status || data?.status || ""
-    ).toLowerCase();
-
-    if (["successful", "succeeded", "completed", "success"].includes(mtnStatus)) {
+    if (status === "completed") {
       const { data: row } = await supabase
         .from("tenant_payments")
         .select("id")
@@ -121,7 +97,8 @@ export async function GET(req: NextRequest) {
       }
       return NextResponse.json({ status: "completed" });
     }
-    if (["failed", "rejected", "cancelled", "expired"].includes(mtnStatus)) {
+
+    if (status === "failed") {
       await supabase
         .from("tenant_payments")
         .update({ status: "pending", updated_at: new Date().toISOString() })
@@ -129,8 +106,10 @@ export async function GET(req: NextRequest) {
         .eq("status", "processing");
       return NextResponse.json({ status: "failed" });
     }
+
+    // "processing", or "unknown" because MTN was unreachable. Neither is a
+    // failure the customer should be shown — keep the dialog waiting.
     return NextResponse.json({ status: "processing" });
-    }
   } catch (err) {
     // Auth/ownership failures must surface as 401/403 rather than being
     // disguised as "still processing", which would silently hide a real denial.
